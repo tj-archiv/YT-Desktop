@@ -1,0 +1,24 @@
+{
+  "name": "yt-desktop",
+  "productName": "YT Desktop",
+  "version": "1.0.0",
+  "description": "Standalone desktop client for YouTube with Chrome-grade multi-tabbing, mini-player, and ad-skip.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . \"YT Desktop\" --platform=win32 --arch=x64 --out=release --icon=assets/icon.ico --overwrite"
+  },
+  "keywords": [
+    "youtube",
+    "desktop",
+    "player",
+    "electron",
+    "windows"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^45.3.3"
+  }
+}
