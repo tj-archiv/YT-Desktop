@@ -897,18 +897,32 @@ function setupChannelPreviewHovercard() {
         }
       }
 
-      // 2. Channel name wrapper check (ytd-channel-name, #channel-name, #upload-info, #owner)
+      // 2. Channel name wrapper check (ytd-channel-name, #channel-name, #upload-info, #owner, #byline-container, #byline)
       if (
         el.tagName === 'YTD-CHANNEL-NAME' ||
         el.id === 'channel-name' ||
         el.id === 'upload-info' ||
         el.id === 'owner' ||
-        (el.classList && el.classList.contains('ytd-channel-name'))
+        el.id === 'byline-container' ||
+        el.id === 'byline' ||
+        (el.classList && (el.classList.contains('ytd-channel-name') || el.classList.contains('ytd-video-meta-block')))
       ) {
         const a = el.querySelector('a[href*="/@"], a[href*="/channel/"], a[href*="/c/"], a[href]');
         if (a) {
           const cp = extractChannelPath(a.href || a.getAttribute('href'));
           if (cp) return { anchor: a || el, channelPath: cp };
+        }
+        // Support recommended videos / compact renderers with Polymer navigation endpoints
+        const renderer = el.closest ? el.closest('ytd-compact-video-renderer, ytd-video-meta-block, ytd-rich-grid-media, ytd-video-renderer, ytd-channel-name') : null;
+        const endpointUrl = renderer?.data?.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+                            renderer?.data?.shortBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
+                            renderer?.data?.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+                            renderer?.data?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
+                            el.data?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+                            el.data?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+        if (endpointUrl) {
+          const cp = extractChannelPath(endpointUrl);
+          if (cp) return { anchor: el, channelPath: cp };
         }
       }
 

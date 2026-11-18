@@ -34,6 +34,7 @@ let tabEls = [];
 
 function resetAllTabTransforms() {
   if (tabsList) {
+    tabsList.scrollLeft = 0;
     for (const child of tabsList.children) {
       child.style.transform = '';
       child.style.transition = '';
@@ -243,6 +244,7 @@ function closeTabWithAnimation(tabId) {
 // Render tabs into DOM
 function render() {
   if (isDragging || isFinishingDrag) return; // Keep drag animations uninterrupted
+  if (tabsList) tabsList.scrollLeft = 0;
 
   const currentTabIds = new Set(tabs.map(t => t.id));
 
@@ -405,11 +407,6 @@ function render() {
     const isActive = (tab.id === activeTabId);
     if (el.classList.contains('active') !== isActive) {
       el.classList.toggle('active', isActive);
-      if (isActive) {
-        try {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-        } catch (e) {}
-      }
     }
 
     const isAudible = !!tab.isAudible;
@@ -493,10 +490,8 @@ window.addEventListener('resize', () => {
 
 if (tabsList) {
   tabsList.addEventListener('wheel', (e) => {
-    if (tabsList.scrollWidth > tabsList.clientWidth) {
-      tabsList.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }
+    // Tabs responsively resize; prevent accidental horizontal offset
+    e.preventDefault();
   }, { passive: false });
 }
 
