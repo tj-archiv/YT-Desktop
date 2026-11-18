@@ -3,6 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 
+app.name = 'YouTube';
+const userDataPath = path.join(app.getPath('appData'), 'YouTube');
+try {
+  app.setPath('userData', userDataPath);
+} catch (e) {}
+
 const logFile = path.join(app.getPath('userData'), 'app-debug.log');
 function log(msg) {
   try {
@@ -50,7 +56,6 @@ let activeTabId = null;
 const SHELL_HEIGHT = 40; // 40px tabbar (no browser URL toolbar)
 const DEFAULT_HOME_URL = 'https://www.youtube.com/';
 
-const FIREFOX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 app.userAgentFallback = CHROME_UA;
@@ -458,11 +463,7 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
   });
 
   view.webContents.on('will-navigate', (event, navUrl) => {
-    if (isAuthUrl(navUrl)) {
-      view.webContents.setUserAgent(FIREFOX_UA);
-    } else {
-      view.webContents.setUserAgent(CHROME_UA);
-    }
+    view.webContents.setUserAgent(CHROME_UA);
     if (!isInternalDomain(navUrl)) {
       event.preventDefault();
       shell.openExternal(navUrl);
@@ -471,11 +472,7 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
 
   view.webContents.on('did-start-navigation', (event, navUrl, isInPlace, isMainFrame) => {
     if (isMainFrame) {
-      if (isAuthUrl(navUrl)) {
-        view.webContents.setUserAgent(FIREFOX_UA);
-      } else {
-        view.webContents.setUserAgent(CHROME_UA);
-      }
+      view.webContents.setUserAgent(CHROME_UA);
     }
   });
 
@@ -657,18 +654,9 @@ function createWindow() {
   log('Loaded state: ' + JSON.stringify(state));
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
 
-  // Stealth headers for Google Auth while keeping pure Chrome for YouTube
+  // Ensure request headers always send clean Chrome headers
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    if (isAuthUrl(details.url)) {
-      delete details.requestHeaders['sec-ch-ua'];
-      delete details.requestHeaders['sec-ch-ua-mobile'];
-      delete details.requestHeaders['sec-ch-ua-platform'];
-      delete details.requestHeaders['sec-ch-ua-model'];
-      delete details.requestHeaders['sec-ch-ua-arch'];
-      delete details.requestHeaders['sec-ch-ua-bitness'];
-      delete details.requestHeaders['sec-ch-ua-full-version-list'];
-      details.requestHeaders['User-Agent'] = FIREFOX_UA;
-    }
+    details.requestHeaders['User-Agent'] = CHROME_UA;
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
 
@@ -682,7 +670,7 @@ function createWindow() {
     ...initialBounds,
     minWidth: 420,
     minHeight: 260,
-    title: 'YT Desktop',
+    title: 'YouTube',
     icon: iconPath,
     backgroundColor: '#0f0f0f',
     show: false, // Prevents white flash on launch

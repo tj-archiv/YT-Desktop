@@ -1,12 +1,12 @@
 {
-  "name": "yt-desktop",
-  "productName": "YT Desktop",
-  "version": "1.0.0",
+  "name": "youtube-desktop",
+  "productName": "YouTube",
+  "version": "1.0.3",
   "description": "Standalone desktop client for YouTube with Chrome-grade multi-tabbing, mini-player, and ad-skip.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "package": "electron-packager . \"YT Desktop\" --platform=win32 --arch=x64 --out=release --icon=assets/icon.ico --overwrite"
+    "package": "electron-packager . YouTube --platform=win32 --arch=x64 --out=release --icon=assets/icon.ico --overwrite"
   },
   "keywords": [
     "youtube",

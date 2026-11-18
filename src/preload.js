@@ -17,19 +17,6 @@ try {
   });
 } catch (e) {}
 
-if (location.hostname.includes('google.') || location.hostname.includes('accounts.')) {
-  try {
-    Object.defineProperty(navigator, 'userAgent', {
-      get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
-      configurable: true
-    });
-    Object.defineProperty(navigator, 'appVersion', {
-      get: () => '5.0 (Windows)',
-      configurable: true
-    });
-  } catch (e) {}
-}
-
 // 2. Clean Background Tab Audio & Video Handling (Official YouTube Player API & DOM Visibility)
 let isForegroundTab = false;
 try {
