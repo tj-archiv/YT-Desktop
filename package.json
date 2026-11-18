@@ -1,7 +1,7 @@
 {
   "name": "youtube-desktop",
   "productName": "YouTube",
-  "version": "1.0.3",
+  "version": "1.0.0",
   "description": "Standalone desktop client for YouTube with Chrome-grade multi-tabbing, mini-player, and ad-skip.",
   "main": "src/main.js",
   "scripts": {
