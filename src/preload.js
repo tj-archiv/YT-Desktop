@@ -96,25 +96,47 @@ const mainWorldScript = `
         hasEverBeenForeground = true;
         if (pendingAutoplayOnFirstSwitch) {
           pendingAutoplayOnFirstSwitch = false;
-          // Unopened tab now opened for the first time: start playback cleanly from the beginning (0:00)
+
           const startPlayback = () => {
             const p = getPlayer();
             const v = document.querySelector('video');
+
+            // If already actively playing, do not interrupt or re-seek
+            if (v && !v.paused && v.currentTime > 0) return true;
+            if (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1) return true;
+
+            let started = false;
             if (p && typeof p.playVideo === 'function') {
               try {
-                if (typeof p.seekTo === 'function') p.seekTo(0, true);
+                // Only seek if video drifted noticeably while in background (> 1.0s)
+                if (typeof p.getCurrentTime === 'function' && p.getCurrentTime() > 1.0 && typeof p.seekTo === 'function') {
+                  p.seekTo(0, true);
+                }
                 p.playVideo();
+                started = true;
               } catch (e) {}
             } else if (v) {
               try {
-                v.currentTime = 0;
+                if (v.currentTime > 1.0) v.currentTime = 0;
                 v.play();
+                started = true;
               } catch (e) {}
             }
+            return started;
           };
-          startPlayback();
-          setTimeout(startPlayback, 120);
-          setTimeout(startPlayback, 400);
+
+          if (!startPlayback()) {
+            let retries = 0;
+            const retryInterval = setInterval(() => {
+              retries++;
+              const v = document.querySelector('video');
+              const p = getPlayer();
+              const isPlaying = (v && !v.paused && v.currentTime > 0) || (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1);
+              if (isPlaying || startPlayback() || retries > 30) {
+                clearInterval(retryInterval);
+              }
+            }, 100);
+          }
         }
       } else if (wasPlayingBeforeBackground) {
         // Tab user was already watching: resume playback from the saved timestamp
@@ -123,24 +145,41 @@ const mainWorldScript = `
         const resumePlayback = () => {
           const p = getPlayer();
           const v = document.querySelector('video');
+
+          // If already actively playing, do not interrupt
+          if (v && !v.paused && v.currentTime > 0) return true;
+          if (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1) return true;
+
+          let resumed = false;
           if (p && typeof p.playVideo === 'function') {
             if (savedTimestamp > 0 && typeof p.getCurrentTime === 'function') {
               const cur = p.getCurrentTime();
-              if (Math.abs(cur - savedTimestamp) > 1 && typeof p.seekTo === 'function') {
+              if (Math.abs(cur - savedTimestamp) > 1.0 && typeof p.seekTo === 'function') {
                 try { p.seekTo(savedTimestamp, true); } catch (e) {}
               }
             }
-            try { p.playVideo(); } catch (e) {}
+            try { p.playVideo(); resumed = true; } catch (e) {}
           } else if (v) {
-            if (savedTimestamp > 0 && Math.abs(v.currentTime - savedTimestamp) > 1) {
+            if (savedTimestamp > 0 && Math.abs(v.currentTime - savedTimestamp) > 1.0) {
               try { v.currentTime = savedTimestamp; } catch (e) {}
             }
-            try { v.play(); } catch (e) {}
+            try { v.play(); resumed = true; } catch (e) {}
           }
+          return resumed;
         };
 
-        resumePlayback();
-        setTimeout(resumePlayback, 100);
+        if (!resumePlayback()) {
+          let retries = 0;
+          const retryInterval = setInterval(() => {
+            retries++;
+            const v = document.querySelector('video');
+            const p = getPlayer();
+            const isPlaying = (v && !v.paused && v.currentTime > 0) || (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1);
+            if (isPlaying || resumePlayback() || retries > 30) {
+              clearInterval(retryInterval);
+            }
+          }, 100);
+        }
       }
     } else {
       // Switched AWAY to background
@@ -208,8 +247,13 @@ const mainWorldScript = `
     if (isForeground && pendingAutoplayOnFirstSwitch) {
       pendingAutoplayOnFirstSwitch = false;
       try {
-        if (typeof player.seekTo === 'function') player.seekTo(0, true);
-        if (typeof player.playVideo === 'function') player.playVideo();
+        const state = typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1;
+        if (state !== 1) {
+          if (typeof player.getCurrentTime === 'function' && player.getCurrentTime() > 1.0 && typeof player.seekTo === 'function') {
+            player.seekTo(0, true);
+          }
+          if (typeof player.playVideo === 'function') player.playVideo();
+        }
       } catch (e) {}
     }
 
