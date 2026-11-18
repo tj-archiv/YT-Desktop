@@ -274,11 +274,13 @@ function updateActiveViewBounds() {
         t.view.setBounds({ x: 0, y: SHELL_HEIGHT, width: width, height: contentHeight });
       }
       t.view.setVisible(true);
+      try { t.view.webContents.setAudioMuted(false); } catch (e) {}
       t.view.webContents.send('tab-visibility-change', true);
     } else {
       // Inactive tabs retain real layout bounds so video/DOM doesn't freeze or reflow
       t.view.setBounds({ x: 0, y: SHELL_HEIGHT, width: width, height: contentHeight });
       t.view.setVisible(false);
+      try { t.view.webContents.setAudioMuted(false); } catch (e) {}
       t.view.webContents.send('tab-visibility-change', false);
     }
   });
@@ -331,9 +333,7 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
 
   view.webContents.setBackgroundThrottling(false);
   view.setBackgroundColor('#0f0f0f');
-
-  // Background tabs start muted so they never make sound until focused
-  view.webContents.setAudioMuted(isBackground);
+  try { view.webContents.setAudioMuted(false); } catch (e) {}
 
   // Prevent splash screen glitching & white flashes
   view.webContents.on('did-start-loading', () => {
@@ -634,7 +634,6 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
 
   if (isBackground) {
     view.setVisible(false);
-    view.webContents.setAudioMuted(true);
     view.webContents.send('tab-visibility-change', false);
     broadcastState();
   } else {
