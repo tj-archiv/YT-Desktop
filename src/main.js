@@ -233,6 +233,69 @@ function broadcastState() {
   });
 }
 
+function syncTabMediaPriorities() {
+  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeIsPlaying = activeTab ? !!activeTab.isPlaying : false;
+
+  log(`syncTabMediaPriorities: activeTabId=${activeTabId}, activeIsPlaying=${activeIsPlaying}`);
+
+  if (activeIsPlaying) {
+    // Active tab is playing: it takes absolute priority!
+    tabs.forEach(tab => {
+      if (!tab.view || tab.view.webContents.isDestroyed()) return;
+
+      if (tab.id === activeTabId) {
+        tab.view.webContents.setAudioMuted(false);
+        tab.yieldedToActive = false;
+      } else {
+        // Inactive tabs yield to active video
+        if (tab.isPlaying || tab.yieldedToActive) {
+          tab.yieldedToActive = true;
+          tab.isPlaying = false;
+          tab.view.webContents.setAudioMuted(true);
+          try {
+            tab.view.webContents.send('tab-media-command', 'pause-yield');
+          } catch (e) {}
+        } else {
+          tab.view.webContents.setAudioMuted(true);
+        }
+      }
+    });
+  } else {
+    // Active tab is NOT playing (e.g. paused by user clicking pause, or browsing page without playing video)
+    if (activeTab && activeTab.view && !activeTab.view.webContents.isDestroyed()) {
+      activeTab.view.webContents.setAudioMuted(false);
+    }
+
+    const inactiveTabs = tabs.filter(t => t.id !== activeTabId && t.view && !t.view.webContents.isDestroyed());
+
+    // Find the most recently played inactive tab to resume/continue playing
+    const candidateToResume = inactiveTabs
+      .filter(t => t.yieldedToActive || t.isPlaying)
+      .sort((a, b) => (b.lastPlayedTime || 0) - (a.lastPlayedTime || 0))[0];
+
+    inactiveTabs.forEach(tab => {
+      if (candidateToResume && tab.id === candidateToResume.id) {
+        tab.yieldedToActive = false;
+        tab.isPlaying = true;
+        tab.view.webContents.setAudioMuted(false);
+        try {
+          tab.view.webContents.send('tab-media-command', 'resume-yield');
+        } catch (e) {}
+      } else if (tab.isPlaying) {
+        tab.yieldedToActive = true;
+        tab.isPlaying = false;
+        tab.view.webContents.setAudioMuted(true);
+        try {
+          tab.view.webContents.send('tab-media-command', 'pause-yield');
+        } catch (e) {}
+      } else {
+        tab.view.webContents.setAudioMuted(true);
+      }
+    });
+  }
+}
+
 function updateActiveViewBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) return; // Prevent collapse to 0x0 while minimized on Windows
@@ -251,16 +314,16 @@ function updateActiveViewBounds() {
         t.view.setBounds({ x: 0, y: SHELL_HEIGHT, width: width, height: contentHeight });
       }
       t.view.setVisible(true);
-      t.view.webContents.setAudioMuted(false);
       t.view.webContents.send('tab-visibility-change', true);
     } else {
       // Inactive tabs retain real layout bounds so video/DOM doesn't freeze or reflow
       t.view.setBounds({ x: 0, y: SHELL_HEIGHT, width: width, height: contentHeight });
       t.view.setVisible(false);
-      t.view.webContents.setAudioMuted(true);
       t.view.webContents.send('tab-visibility-change', false);
     }
   });
+
+  syncTabMediaPriorities();
 }
 
 function switchTab(tabId) {
@@ -268,6 +331,7 @@ function switchTab(tabId) {
   if (!targetTab) return;
 
   activeTabId = tabId;
+  targetTab.hasEverBeenForeground = true;
   updateActiveViewBounds();
   try {
     targetTab.view.webContents.focus();
@@ -338,8 +402,24 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     isLoading: true,
     isAudible: false,
     canGoBack: false,
-    canGoForward: false
+    canGoForward: false,
+    isPlaying: false,
+    yieldedToActive: false,
+    lastPlayedTime: 0,
+    hasEverBeenForeground: !isBackground
   };
+
+  view.webContents.on('media-started-playing', () => {
+    tab.isPlaying = true;
+    tab.lastPlayedTime = Date.now();
+    tab.yieldedToActive = false;
+    syncTabMediaPriorities();
+  });
+
+  view.webContents.on('media-paused', () => {
+    tab.isPlaying = false;
+    syncTabMediaPriorities();
+  });
 
   // Chrome Keyboard Shortcuts inside tab view (Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+1..9)
   view.webContents.on('before-input-event', (event, input) => {
@@ -473,6 +553,9 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
   view.webContents.on('did-start-navigation', (event, navUrl, isInPlace, isMainFrame) => {
     if (isMainFrame) {
       view.webContents.setUserAgent(CHROME_UA);
+      tab.isPlaying = false;
+      tab.yieldedToActive = false;
+      syncTabMediaPriorities();
     }
   });
 
@@ -635,6 +718,7 @@ function closeTab(tabId) {
   } catch (e) {}
 
   tabs.splice(index, 1);
+  syncTabMediaPriorities();
 
   if (tabs.length === 0) {
     createTab(DEFAULT_HOME_URL, false);
@@ -1112,6 +1196,19 @@ ipcMain.on('open-url-in-new-tab', (event, data) => {
   const background = typeof data === 'object' ? !!data.background : true;
   createTab(url, background);
   saveWindowState();
+});
+
+ipcMain.on('tab-media-status', (event, { isPlaying }) => {
+  const senderWebContents = event.sender;
+  const tab = tabs.find(t => t.view && t.view.webContents === senderWebContents);
+  if (!tab) return;
+
+  tab.isPlaying = !!isPlaying;
+  if (tab.isPlaying) {
+    tab.lastPlayedTime = Date.now();
+    tab.yieldedToActive = false;
+  }
+  syncTabMediaPriorities();
 });
 
 ipcMain.on('switch-tab', (event, tabId) => {

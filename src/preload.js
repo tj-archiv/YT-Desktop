@@ -36,8 +36,16 @@ const mainWorldScript = `
   let isForeground = ${isForegroundTab ? 'true' : 'false'};
   let hasEverBeenForeground = ${isForegroundTab ? 'true' : 'false'};
   let pendingAutoplayOnFirstSwitch = ${!isForegroundTab ? 'true' : 'false'};
-  let wasPlayingBeforeBackground = false;
-  let savedTimestamp = 0;
+  let isYieldedToActive = false;
+  let reportedPlayingState = false;
+
+  function reportMediaState(playing) {
+    if (reportedPlayingState === playing) return;
+    reportedPlayingState = playing;
+    try {
+      window.postMessage({ type: '__yt_media_status__', isPlaying: playing }, '*');
+    } catch (e) {}
+  }
 
   // 1. Intercept HTMLMediaElement.prototype.play:
   // Strictly prevent unopened background tabs from playing video or advancing time before user switches to them
@@ -45,6 +53,9 @@ const mainWorldScript = `
   HTMLMediaElement.prototype.play = function() {
     if (!isForeground && !hasEverBeenForeground) {
       pendingAutoplayOnFirstSwitch = true;
+      return Promise.resolve();
+    }
+    if (isYieldedToActive) {
       return Promise.resolve();
     }
     return origPlay.apply(this, arguments);
@@ -77,6 +88,59 @@ const mainWorldScript = `
     return document.querySelector('#movie_player');
   }
 
+  function handleMediaCommand(cmd) {
+    const p = getPlayer();
+    const v = document.querySelector('video');
+
+    if (cmd === 'pause-yield') {
+      isYieldedToActive = true;
+      try {
+        if (p && typeof p.pauseVideo === 'function') {
+          p.pauseVideo();
+        } else if (v) {
+          v.pause();
+        }
+      } catch (e) {}
+      reportMediaState(false);
+    } else if (cmd === 'resume-yield') {
+      isYieldedToActive = false;
+      try {
+        if (p && typeof p.playVideo === 'function') {
+          p.playVideo();
+        } else if (v) {
+          v.play();
+        }
+      } catch (e) {}
+      reportMediaState(true);
+    }
+  }
+
+  function startPlayback() {
+    const p = getPlayer();
+    const v = document.querySelector('video');
+
+    if (v && !v.paused && v.currentTime > 0) return true;
+    if (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1) return true;
+
+    let started = false;
+    if (p && typeof p.playVideo === 'function') {
+      try {
+        if (typeof p.getCurrentTime === 'function' && p.getCurrentTime() > 1.0 && typeof p.seekTo === 'function') {
+          p.seekTo(0, true);
+        }
+        p.playVideo();
+        started = true;
+      } catch (e) {}
+    } else if (v) {
+      try {
+        if (v.currentTime > 1.0) v.currentTime = 0;
+        v.play();
+        started = true;
+      } catch (e) {}
+    }
+    return started;
+  }
+
   function handleVisibilityChange(visible) {
     const changed = (isForeground !== visible);
     isForeground = visible;
@@ -87,43 +151,11 @@ const mainWorldScript = `
       } catch (e) {}
     }
 
-    const player = getPlayer();
-    const video = document.querySelector('video');
-
     if (visible) {
-      // Switched TO foreground (user activated/switched to this tab)
       if (!hasEverBeenForeground) {
         hasEverBeenForeground = true;
         if (pendingAutoplayOnFirstSwitch) {
           pendingAutoplayOnFirstSwitch = false;
-
-          const startPlayback = () => {
-            const p = getPlayer();
-            const v = document.querySelector('video');
-
-            // If already actively playing, do not interrupt or re-seek
-            if (v && !v.paused && v.currentTime > 0) return true;
-            if (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1) return true;
-
-            let started = false;
-            if (p && typeof p.playVideo === 'function') {
-              try {
-                // Only seek if video drifted noticeably while in background (> 1.0s)
-                if (typeof p.getCurrentTime === 'function' && p.getCurrentTime() > 1.0 && typeof p.seekTo === 'function') {
-                  p.seekTo(0, true);
-                }
-                p.playVideo();
-                started = true;
-              } catch (e) {}
-            } else if (v) {
-              try {
-                if (v.currentTime > 1.0) v.currentTime = 0;
-                v.play();
-                started = true;
-              } catch (e) {}
-            }
-            return started;
-          };
 
           if (!startPlayback()) {
             let retries = 0;
@@ -138,77 +170,10 @@ const mainWorldScript = `
             }, 100);
           }
         }
-      } else if (wasPlayingBeforeBackground) {
-        // Tab user was already watching: resume playback from the saved timestamp
-        wasPlayingBeforeBackground = false;
-
-        const resumePlayback = () => {
-          const p = getPlayer();
-          const v = document.querySelector('video');
-
-          // If already actively playing, do not interrupt
-          if (v && !v.paused && v.currentTime > 0) return true;
-          if (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1) return true;
-
-          let resumed = false;
-          if (p && typeof p.playVideo === 'function') {
-            if (savedTimestamp > 0 && typeof p.getCurrentTime === 'function') {
-              const cur = p.getCurrentTime();
-              if (Math.abs(cur - savedTimestamp) > 1.0 && typeof p.seekTo === 'function') {
-                try { p.seekTo(savedTimestamp, true); } catch (e) {}
-              }
-            }
-            try { p.playVideo(); resumed = true; } catch (e) {}
-          } else if (v) {
-            if (savedTimestamp > 0 && Math.abs(v.currentTime - savedTimestamp) > 1.0) {
-              try { v.currentTime = savedTimestamp; } catch (e) {}
-            }
-            try { v.play(); resumed = true; } catch (e) {}
-          }
-          return resumed;
-        };
-
-        if (!resumePlayback()) {
-          let retries = 0;
-          const retryInterval = setInterval(() => {
-            retries++;
-            const v = document.querySelector('video');
-            const p = getPlayer();
-            const isPlaying = (v && !v.paused && v.currentTime > 0) || (p && typeof p.getPlayerState === 'function' && p.getPlayerState() === 1);
-            if (isPlaying || resumePlayback() || retries > 30) {
-              clearInterval(retryInterval);
-            }
-          }, 100);
-        }
-      }
-    } else {
-      // Switched AWAY to background
-      let isPlaying = false;
-      if (player && typeof player.getPlayerState === 'function') {
-        const state = player.getPlayerState();
-        isPlaying = (state === 1 || state === 3); // 1 = playing, 3 = buffering
-      } else if (video) {
-        isPlaying = (!video.paused && !video.ended);
-      }
-
-      if (isPlaying) {
-        wasPlayingBeforeBackground = true;
-        if (player && typeof player.getCurrentTime === 'function') {
-          savedTimestamp = player.getCurrentTime();
-        } else if (video) {
-          savedTimestamp = video.currentTime;
-        }
-
-        // Pause at current timestamp WITHOUT rewinding!
-        try {
-          if (player && typeof player.pauseVideo === 'function') {
-            player.pauseVideo();
-          } else if (video) {
-            video.pause();
-          }
-        } catch (e) {}
       }
     }
+    // When visible === false, we do NOT automatically pause!
+    // Priority management is handled cooperatively via main.js
   }
 
   // Cross-world event communication
@@ -221,16 +186,16 @@ const mainWorldScript = `
   window.addEventListener('message', (e) => {
     if (e.data && e.data.type === '__yt_tab_visibility__' && typeof e.data.isVisible === 'boolean') {
       handleVisibilityChange(e.data.isVisible);
+    } else if (e.data && e.data.type === '__yt_media_command__' && typeof e.data.command === 'string') {
+      handleMediaCommand(e.data.command);
     }
   });
 
-  // Reset background playback tracker on fresh in-page navigations while in foreground
   window.addEventListener('yt-navigate-finish', () => {
     if (isForeground) {
-      wasPlayingBeforeBackground = false;
-      savedTimestamp = 0;
       hasEverBeenForeground = true;
       pendingAutoplayOnFirstSwitch = false;
+      isYieldedToActive = false;
     }
   });
 
@@ -261,25 +226,22 @@ const mainWorldScript = `
       observerAttached = true;
       try {
         player.addEventListener('onStateChange', (state) => {
-          if (!isForeground) {
-            if (!hasEverBeenForeground) {
-              // Unopened background tab: ensure it stays paused at 0:00!
-              pendingAutoplayOnFirstSwitch = true;
-              try {
-                if (typeof player.pauseVideo === 'function') player.pauseVideo();
-                if (typeof player.seekTo === 'function') player.seekTo(0, true);
-              } catch (e) {}
-            } else if (state === 1 || state === 3) {
-              if (!wasPlayingBeforeBackground) {
-                wasPlayingBeforeBackground = true;
-                if (typeof player.getCurrentTime === 'function') {
-                  savedTimestamp = player.getCurrentTime();
-                }
-                try {
-                  if (typeof player.pauseVideo === 'function') player.pauseVideo();
-                } catch (e) {}
-              }
+          if (!isForeground && !hasEverBeenForeground) {
+            pendingAutoplayOnFirstSwitch = true;
+            try {
+              if (typeof player.pauseVideo === 'function') player.pauseVideo();
+              if (typeof player.seekTo === 'function') player.seekTo(0, true);
+            } catch (e) {}
+            reportMediaState(false);
+            return;
+          }
+
+          if (state === 1) { // playing
+            if (!isYieldedToActive) {
+              reportMediaState(true);
             }
+          } else if (state === 2 || state === 0) { // paused or ended
+            reportMediaState(false);
           }
         });
       } catch (e) {}
@@ -297,30 +259,32 @@ const mainWorldScript = `
     }
 
     video.addEventListener('playing', () => {
-      if (!isForeground) {
-        if (!hasEverBeenForeground) {
-          // Unopened background tab: ensure it stays paused at 0:00!
-          pendingAutoplayOnFirstSwitch = true;
-          try {
-            video.currentTime = 0;
-            video.pause();
-            const p = getPlayer();
-            if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
-          } catch (e) {}
-        } else if (!wasPlayingBeforeBackground) {
-          wasPlayingBeforeBackground = true;
-          savedTimestamp = video.currentTime;
-          try {
-            video.pause();
-            const p = getPlayer();
-            if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
-          } catch (e) {}
-        }
+      if (!isForeground && !hasEverBeenForeground) {
+        pendingAutoplayOnFirstSwitch = true;
+        try {
+          video.currentTime = 0;
+          video.pause();
+          const p = getPlayer();
+          if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
+        } catch (e) {}
+        reportMediaState(false);
+        return;
+      }
+
+      if (!isYieldedToActive) {
+        reportMediaState(true);
       }
     });
 
+    video.addEventListener('pause', () => {
+      reportMediaState(false);
+    });
+
+    video.addEventListener('ended', () => {
+      reportMediaState(false);
+    });
+
     video.addEventListener('timeupdate', () => {
-      // Unopened background tab safety lock: never allow playback or time advancement
       if (!isForeground && !hasEverBeenForeground && video.currentTime > 0.5) {
         pendingAutoplayOnFirstSwitch = true;
         try {
@@ -329,23 +293,37 @@ const mainWorldScript = `
           const p = getPlayer();
           if (p && typeof p.pauseVideo === 'function') {
             p.pauseVideo();
-            if (typeof p.seekTo === 'function') p.seekTo(0, true);
           }
         } catch (e) {}
+        reportMediaState(false);
       }
     });
+  }
+
+  function checkMediaState() {
+    if (!hasEverBeenForeground) return;
+    const p = getPlayer();
+    const v = document.querySelector('video');
+    let playing = false;
+    if (p && typeof p.getPlayerState === 'function') {
+      playing = (p.getPlayerState() === 1);
+    } else if (v) {
+      playing = (!v.paused && !v.ended && v.currentTime > 0);
+    }
+    if (isYieldedToActive) playing = false;
+    reportMediaState(playing);
   }
 
   const pollInterval = setInterval(() => {
     hookPlayer();
     hookVideo();
-  }, 100);
-
-  setTimeout(() => clearInterval(pollInterval), 20000);
+    checkMediaState();
+  }, 250);
 
   document.addEventListener('DOMContentLoaded', () => {
     hookPlayer();
     hookVideo();
+    checkMediaState();
   });
 })();
 `;
@@ -359,6 +337,18 @@ try {
     } catch (err) {}
   });
 }
+
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === '__yt_media_status__' && typeof e.data.isPlaying === 'boolean') {
+    ipcRenderer.send('tab-media-status', { isPlaying: e.data.isPlaying });
+  }
+});
+
+ipcRenderer.on('tab-media-command', (event, command) => {
+  try {
+    window.postMessage({ type: '__yt_media_command__', command }, '*');
+  } catch (e) {}
+});
 
 ipcRenderer.on('tab-visibility-change', (event, isVisible) => {
   isForegroundTab = isVisible;
