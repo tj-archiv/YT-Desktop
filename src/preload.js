@@ -36,14 +36,10 @@ const mainWorldScript = `
   let isForeground = ${isForegroundTab ? 'true' : 'false'};
   let hasEverBeenForeground = ${isForegroundTab ? 'true' : 'false'};
   let pendingAutoplayOnFirstSwitch = ${!isForegroundTab ? 'true' : 'false'};
-  let isYieldedToActive = false;
-  let reportedPlayingState = false;
 
-  function reportMediaState(playing) {
-    if (reportedPlayingState === playing) return;
-    reportedPlayingState = playing;
+  function notifyVideoStartedPlaying() {
     try {
-      window.postMessage({ type: '__yt_media_status__', isPlaying: playing }, '*');
+      window.postMessage({ type: '__yt_video_started_playing__' }, '*');
     } catch (e) {}
   }
 
@@ -53,9 +49,6 @@ const mainWorldScript = `
   HTMLMediaElement.prototype.play = function() {
     if (!isForeground && !hasEverBeenForeground) {
       pendingAutoplayOnFirstSwitch = true;
-      return Promise.resolve();
-    }
-    if (isYieldedToActive) {
       return Promise.resolve();
     }
     return origPlay.apply(this, arguments);
@@ -86,33 +79,6 @@ const mainWorldScript = `
 
   function getPlayer() {
     return document.querySelector('#movie_player');
-  }
-
-  function handleMediaCommand(cmd) {
-    const p = getPlayer();
-    const v = document.querySelector('video');
-
-    if (cmd === 'pause-yield') {
-      isYieldedToActive = true;
-      try {
-        if (p && typeof p.pauseVideo === 'function') {
-          p.pauseVideo();
-        } else if (v) {
-          v.pause();
-        }
-      } catch (e) {}
-      reportMediaState(false);
-    } else if (cmd === 'resume-yield') {
-      isYieldedToActive = false;
-      try {
-        if (p && typeof p.playVideo === 'function') {
-          p.playVideo();
-        } else if (v) {
-          v.play();
-        }
-      } catch (e) {}
-      reportMediaState(true);
-    }
   }
 
   function startPlayback() {
@@ -173,7 +139,7 @@ const mainWorldScript = `
       }
     }
     // When visible === false, we do NOT automatically pause!
-    // Priority management is handled cooperatively via main.js
+    // Video continues playing in background like Google Chrome, until user plays a video on another tab.
   }
 
   // Cross-world event communication
@@ -186,8 +152,6 @@ const mainWorldScript = `
   window.addEventListener('message', (e) => {
     if (e.data && e.data.type === '__yt_tab_visibility__' && typeof e.data.isVisible === 'boolean') {
       handleVisibilityChange(e.data.isVisible);
-    } else if (e.data && e.data.type === '__yt_media_command__' && typeof e.data.command === 'string') {
-      handleMediaCommand(e.data.command);
     }
   });
 
@@ -195,7 +159,6 @@ const mainWorldScript = `
     if (isForeground) {
       hasEverBeenForeground = true;
       pendingAutoplayOnFirstSwitch = false;
-      isYieldedToActive = false;
     }
   });
 
@@ -232,16 +195,11 @@ const mainWorldScript = `
               if (typeof player.pauseVideo === 'function') player.pauseVideo();
               if (typeof player.seekTo === 'function') player.seekTo(0, true);
             } catch (e) {}
-            reportMediaState(false);
             return;
           }
 
-          if (state === 1) { // playing
-            if (!isYieldedToActive) {
-              reportMediaState(true);
-            }
-          } else if (state === 2 || state === 0) { // paused or ended
-            reportMediaState(false);
+          if (state === 1) { // 1 = playing
+            notifyVideoStartedPlaying();
           }
         });
       } catch (e) {}
@@ -267,21 +225,10 @@ const mainWorldScript = `
           const p = getPlayer();
           if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
         } catch (e) {}
-        reportMediaState(false);
         return;
       }
 
-      if (!isYieldedToActive) {
-        reportMediaState(true);
-      }
-    });
-
-    video.addEventListener('pause', () => {
-      reportMediaState(false);
-    });
-
-    video.addEventListener('ended', () => {
-      reportMediaState(false);
+      notifyVideoStartedPlaying();
     });
 
     video.addEventListener('timeupdate', () => {
@@ -295,35 +242,18 @@ const mainWorldScript = `
             p.pauseVideo();
           }
         } catch (e) {}
-        reportMediaState(false);
       }
     });
-  }
-
-  function checkMediaState() {
-    if (!hasEverBeenForeground) return;
-    const p = getPlayer();
-    const v = document.querySelector('video');
-    let playing = false;
-    if (p && typeof p.getPlayerState === 'function') {
-      playing = (p.getPlayerState() === 1);
-    } else if (v) {
-      playing = (!v.paused && !v.ended && v.currentTime > 0);
-    }
-    if (isYieldedToActive) playing = false;
-    reportMediaState(playing);
   }
 
   const pollInterval = setInterval(() => {
     hookPlayer();
     hookVideo();
-    checkMediaState();
   }, 250);
 
   document.addEventListener('DOMContentLoaded', () => {
     hookPlayer();
     hookVideo();
-    checkMediaState();
   });
 })();
 `;
@@ -339,15 +269,9 @@ try {
 }
 
 window.addEventListener('message', (e) => {
-  if (e.data && e.data.type === '__yt_media_status__' && typeof e.data.isPlaying === 'boolean') {
-    ipcRenderer.send('tab-media-status', { isPlaying: e.data.isPlaying });
+  if (e.data && e.data.type === '__yt_video_started_playing__') {
+    ipcRenderer.send('video-started-playing');
   }
-});
-
-ipcRenderer.on('tab-media-command', (event, command) => {
-  try {
-    window.postMessage({ type: '__yt_media_command__', command }, '*');
-  } catch (e) {}
 });
 
 ipcRenderer.on('tab-visibility-change', (event, isVisible) => {
