@@ -429,6 +429,17 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
       return;
     }
 
+    // Escape: Exit Fullscreen
+    if (input.key === 'Escape' && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()) {
+      event.preventDefault();
+      log('Escape pressed while in fullscreen, exiting fullscreen');
+      mainWindow.setFullScreen(false);
+      isHtmlFullScreen = false;
+      updateActiveViewBounds();
+      try { view.webContents.send('fullscreen-state-change', false); } catch (e) {}
+      return;
+    }
+
     // F11: Toggle Fullscreen
     if (input.key === 'F11' && !input.control && !input.alt && !input.shift) {
       event.preventDefault();
@@ -510,6 +521,13 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     mainWindow.setFullScreen(false);
     updateActiveViewBounds();
     try { view.webContents.send('fullscreen-state-change', false); } catch (e) {}
+  });
+
+  view.webContents.on('console-message', (event, ...args) => {
+    const msg = (typeof event === 'object' && event && event.message) ? event.message : (args[1] || args[0]);
+    if (typeof msg === 'string' && (msg.includes('[FS-EXIT]') || msg.includes('Error') || msg.includes('error'))) {
+      log(`[VIEW-CONSOLE] ${msg}`);
+    }
   });
 
   view.webContents.on('will-navigate', (event, navUrl) => {
@@ -1344,6 +1362,10 @@ ipcMain.on('exit-fullscreen', () => {
   if (activeTab?.view?.webContents && !activeTab.view.webContents.isDestroyed()) {
     try { activeTab.view.webContents.send('fullscreen-state-change', false); } catch (e) {}
   }
+});
+
+ipcMain.on('log-debug', (event, msg) => {
+  log(`[PRELOAD-DEBUG] ${msg}`);
 });
 
 app.on('second-instance', () => {

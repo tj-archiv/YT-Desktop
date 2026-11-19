@@ -1209,27 +1209,123 @@ function setupTabTitleTooltip() {
 
 // Fullscreen Top-Center Chrome-Style "✕" Exit Button
 function setupFullScreenExitButton() {
-  const styleEl = document.createElement('style');
-  styleEl.textContent = `
-    #yt-fs-exit-btn {
-      all: initial !important;
+  try {
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      #yt-fs-exit-btn {
+        position: fixed !important;
+        top: 16px !important;
+        left: 50% !important;
+        transform: translateX(-50%) translateY(-80px) !important;
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        max-width: 44px !important;
+        max-height: 44px !important;
+        border-radius: 50% !important;
+        background: rgba(18, 18, 22, 0.94) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        z-index: 2147483647 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: transform 0.22s cubic-bezier(0.1, 0.9, 0.2, 1),
+                    opacity 0.2s ease,
+                    background 0.15s ease,
+                    border-color 0.15s ease,
+                    box-shadow 0.15s ease !important;
+        user-select: none !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        line-height: 1 !important;
+        outline: none !important;
+      }
+      #yt-fs-exit-btn.visible {
+        transform: translateX(-50%) translateY(0px) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        visibility: visible !important;
+      }
+      #yt-fs-exit-btn:hover {
+        background: rgba(45, 45, 55, 0.98) !important;
+        border-color: rgba(255, 255, 255, 0.65) !important;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.9), 0 0 16px rgba(255, 255, 255, 0.35) !important;
+        transform: translateX(-50%) translateY(0px) scale(1.08) !important;
+      }
+      #yt-fs-exit-btn:active {
+        transform: translateX(-50%) translateY(0px) scale(0.95) !important;
+        background: rgba(65, 65, 78, 1) !important;
+      }
+      #yt-fs-exit-btn svg {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+        display: block !important;
+        pointer-events: none !important;
+        stroke: #ffffff !important;
+        fill: none !important;
+      }
+      #yt-fs-exit-btn svg path {
+        stroke: #ffffff !important;
+        stroke-width: 2.5 !important;
+        stroke-linecap: round !important;
+        stroke-linejoin: round !important;
+        fill: none !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(styleEl);
+
+    const btn = document.createElement('div');
+    btn.id = 'yt-fs-exit-btn';
+    btn.setAttribute('role', 'button');
+    btn.setAttribute('tabindex', '0');
+    btn.setAttribute('title', 'Exit full screen (Esc)');
+    btn.setAttribute('aria-label', 'Exit full screen');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '20');
+    svg.setAttribute('height', '20');
+    svg.style.cssText = 'display:block!important;width:20px!important;height:20px!important;min-width:20px!important;min-height:20px!important;pointer-events:none!important;fill:none!important;stroke:#ffffff!important;';
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M18 6L6 18M6 6l12 12');
+    path.setAttribute('stroke', '#ffffff');
+    path.setAttribute('stroke-width', '2.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('fill', 'none');
+    path.style.cssText = 'stroke:#ffffff!important;stroke-width:2.5!important;stroke-linecap:round!important;stroke-linejoin:round!important;fill:none!important;';
+
+    svg.appendChild(path);
+    btn.appendChild(svg);
+
+    // Apply bulletproof inline styles
+    btn.style.cssText = `
       position: fixed !important;
-      top: 14px !important;
+      top: 16px !important;
       left: 50% !important;
-      transform: translate(-50%, -60px) scale(0.9) !important;
-      width: 40px !important;
-      height: 40px !important;
-      min-width: 40px !important;
-      min-height: 40px !important;
-      max-width: 40px !important;
-      max-height: 40px !important;
+      transform: translateX(-50%) translateY(-80px) !important;
+      width: 44px !important;
+      height: 44px !important;
+      min-width: 44px !important;
+      min-height: 44px !important;
+      max-width: 44px !important;
+      max-height: 44px !important;
       border-radius: 50% !important;
-      background: rgba(24, 24, 28, 0.92) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.25) !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75), 0 1px 4px rgba(0, 0, 0, 0.5) !important;
-      color: #ffffff !important;
+      background: rgba(18, 18, 22, 0.94) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1243,238 +1339,247 @@ function setupFullScreenExitButton() {
                   border-color 0.15s ease,
                   box-shadow 0.15s ease !important;
       user-select: none !important;
-      outline: none !important;
       box-sizing: border-box !important;
       padding: 0 !important;
       margin: 0 !important;
       line-height: 1 !important;
-    }
-    #yt-fs-exit-btn.visible {
-      transform: translate(-50%, 0) scale(1) !important;
-      opacity: 1 !important;
-      pointer-events: auto !important;
-      visibility: visible !important;
-      cursor: pointer !important;
-    }
-    #yt-fs-exit-btn:hover {
-      background: rgba(48, 48, 58, 0.98) !important;
-      border-color: rgba(255, 255, 255, 0.45) !important;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.25) !important;
-      transform: translate(-50%, 0) scale(1.08) !important;
-    }
-    #yt-fs-exit-btn:active {
-      transform: translate(-50%, 0) scale(0.95) !important;
-      background: rgba(65, 65, 78, 1) !important;
-    }
-    #yt-fs-exit-btn svg {
-      width: 14px !important;
-      height: 14px !important;
-      min-width: 14px !important;
-      min-height: 14px !important;
-      max-width: 14px !important;
-      max-height: 14px !important;
-      stroke: #ffffff !important;
-      stroke-width: 2.2 !important;
-      stroke-linecap: round !important;
-      stroke-linejoin: round !important;
-      display: block !important;
-      pointer-events: none !important;
-      fill: none !important;
-      box-sizing: content-box !important;
-    }
-  `;
-  (document.head || document.documentElement).appendChild(styleEl);
+      outline: none !important;
+    `;
 
-  const btn = document.createElement('button');
-  btn.id = 'yt-fs-exit-btn';
-  btn.title = 'Exit full screen (Esc)';
-  btn.setAttribute('aria-label', 'Exit full screen');
-  btn.innerHTML = `
-    <svg viewBox="0 0 14 14" fill="none">
-      <line x1="2.5" y1="2.5" x2="11.5" y2="11.5"/>
-      <line x1="11.5" y1="2.5" x2="2.5" y2="11.5"/>
-    </svg>
-  `;
+    let isFullScreen = false;
+    let hideTimer = null;
+    let isHoveringBtn = false;
+    let isBtnVisible = false;
 
-  let isFullScreen = false;
-  let hideTimer = null;
-  let isHoveringBtn = false;
-
-  function checkIsFullScreen() {
-    if (isFullScreen) return true;
-    if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
-      return true;
-    }
-    const player = document.querySelector('#movie_player');
-    if (player) {
-      if (player.classList.contains('ytp-fullscreen')) return true;
-      if (typeof player.isFullScreen === 'function') {
+    function checkIsFullScreen() {
+      if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+        return true;
+      }
+      const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+      if (player && player.classList.contains('ytp-fullscreen')) return true;
+      if (player && typeof player.isFullScreen === 'function') {
         try { if (player.isFullScreen()) return true; } catch (e) {}
       }
+      const watchFlexy = document.querySelector('ytd-watch-flexy');
+      if (watchFlexy && watchFlexy.hasAttribute('fullscreen')) return true;
+      if (document.documentElement.classList.contains('ytp-fullscreen')) return true;
+      if (document.body && document.body.classList.contains('ytp-fullscreen')) return true;
+      return isFullScreen;
     }
-    const watchFlexy = document.querySelector('ytd-watch-flexy');
-    if (watchFlexy && watchFlexy.hasAttribute('fullscreen')) return true;
-    if (document.documentElement.classList.contains('ytp-fullscreen')) return true;
-    if (document.body.classList.contains('ytp-fullscreen')) return true;
-    return false;
-  }
 
-  function getTargetContainer() {
-    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fsEl) return fsEl;
-    const player = document.querySelector('#movie_player');
-    if (player && (player.classList.contains('ytp-fullscreen') || isFullScreen)) {
-      return player;
+    function getTargetContainer() {
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+      if (fsEl) return fsEl;
+      const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+      if (player && (player.classList.contains('ytp-fullscreen') || isFullScreen)) {
+        return player;
+      }
+      const watchFlexy = document.querySelector('ytd-watch-flexy[fullscreen]');
+      if (watchFlexy) return watchFlexy;
+      return document.body || document.documentElement;
     }
-    return document.body || document.documentElement;
-  }
 
-  function ensureAttached() {
-    const container = getTargetContainer();
-    if (container && btn.parentElement !== container) {
-      container.appendChild(btn);
+    function ensureAttached() {
+      const container = getTargetContainer();
+      if (container && (!btn.parentElement || btn.parentElement !== container || !container.contains(btn))) {
+        container.appendChild(btn);
+      }
     }
-  }
 
-  function showButton() {
-    clearTimeout(hideTimer);
-    hideTimer = null;
-    ensureAttached();
-    btn.classList.add('visible');
-  }
+    function setVisible(visible) {
+      if (visible) {
+        isBtnVisible = true;
+        btn.classList.add('visible');
+        btn.style.setProperty('transform', 'translateX(-50%) translateY(0px)', 'important');
+        btn.style.setProperty('opacity', '1', 'important');
+        btn.style.setProperty('pointer-events', 'auto', 'important');
+        btn.style.setProperty('visibility', 'visible', 'important');
+      } else {
+        isBtnVisible = false;
+        btn.classList.remove('visible');
+        btn.style.setProperty('transform', 'translateX(-50%) translateY(-80px)', 'important');
+        btn.style.setProperty('opacity', '0', 'important');
+        btn.style.setProperty('pointer-events', 'none', 'important');
+      }
+    }
 
-  function hideButton(immediate = false) {
-    if (immediate) {
+    function showButton() {
       clearTimeout(hideTimer);
       hideTimer = null;
-      btn.classList.remove('visible');
-      return;
-    }
-    if (isHoveringBtn) return;
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => {
-      if (!isHoveringBtn) {
-        btn.classList.remove('visible');
-      }
-    }, 750);
-  }
-
-  function updateFullScreenState(fs) {
-    const previous = isFullScreen;
-    isFullScreen = (typeof fs === 'boolean') ? fs : checkIsFullScreen();
-    if (!isFullScreen) {
-      hideButton(true);
-      if (btn.parentElement && btn.parentElement !== document.body) {
-        (document.body || document.documentElement).appendChild(btn);
-      }
-    } else {
       ensureAttached();
+      setVisible(true);
     }
-  }
 
-  function doExitFullScreen(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    hideButton(true);
-
-    // 1. YouTube native player exit
-    const player = document.querySelector('#movie_player');
-    if (player) {
-      if (typeof player.cancelFullScreen === 'function') {
-        try { player.cancelFullScreen(); } catch (err) {}
+    function hideButton(immediate = false) {
+      if (immediate) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+        setVisible(false);
+        return;
       }
-      if (typeof player.toggleFullscreen === 'function' && player.classList.contains('ytp-fullscreen')) {
-        try { player.toggleFullscreen(); } catch (err) {}
+      if (isHoveringBtn) return;
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        if (!isHoveringBtn) {
+          setVisible(false);
+        }
+      }, 750);
+    }
+
+    function updateFullScreenState(fs) {
+      if (typeof fs === 'boolean') {
+        isFullScreen = fs;
+      } else {
+        isFullScreen = checkIsFullScreen();
+      }
+      if (!isFullScreen) {
+        hideButton(true);
+        if (btn.parentElement && btn.parentElement !== document.body) {
+          (document.body || document.documentElement).appendChild(btn);
+        }
+      } else {
+        ensureAttached();
       }
     }
 
-    // 2. DOM Fullscreen API
-    if (document.fullscreenElement || document.webkitFullscreenElement) {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
+    function doExitFullScreen(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
       }
+      hideButton(true);
+
+      // 1. YouTube native player exit
+      const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+      if (player) {
+        if (typeof player.cancelFullScreen === 'function') {
+          try { player.cancelFullScreen(); } catch (err) {}
+        }
+        if (typeof player.toggleFullscreen === 'function' && player.classList.contains('ytp-fullscreen')) {
+          try { player.toggleFullscreen(); } catch (err) {}
+        }
+      }
+
+      // 2. DOM Fullscreen API
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+
+      // 3. Electron IPC to restore window bounds
+      try {
+        ipcRenderer.send('exit-fullscreen');
+      } catch (err) {}
     }
 
-    // 3. Electron IPC to restore window bounds
-    try {
-      ipcRenderer.send('exit-fullscreen');
-    } catch (err) {}
-  }
-
-  btn.addEventListener('click', doExitFullScreen);
-  btn.addEventListener('pointerenter', () => {
-    isHoveringBtn = true;
-    showButton();
-  });
-  btn.addEventListener('pointerleave', () => {
-    isHoveringBtn = false;
-    hideButton();
-  });
-
-  function handlePointerMove(e) {
-    const fsNow = checkIsFullScreen();
-    if (!fsNow) {
-      if (btn.classList.contains('visible')) hideButton(true);
-      return;
-    }
-    isFullScreen = true;
-
-    const clientY = e.clientY;
-    const clientX = e.clientX;
-    const centerX = window.innerWidth / 2;
-    const distFromCenter = Math.abs(clientX - centerX);
-
-    // Natural Chrome-parity Hit Zone:
-    // 1. Within top 45px across entire screen, OR
-    // 2. Within top 85px within 350px of horizontal center
-    const isNearTopCenter = (clientY <= 45) || (clientY <= 85 && distFromCenter <= 350);
-
-    if (isNearTopCenter) {
+    btn.addEventListener('click', doExitFullScreen);
+    btn.addEventListener('pointerenter', () => {
+      isHoveringBtn = true;
+      btn.style.setProperty('background', 'rgba(45, 45, 55, 0.98)', 'important');
+      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.65)', 'important');
+      btn.style.setProperty('box-shadow', '0 6px 24px rgba(0, 0, 0, 0.9), 0 0 16px rgba(255, 255, 255, 0.35)', 'important');
+      btn.style.setProperty('transform', 'translateX(-50%) translateY(0px) scale(1.08)', 'important');
       showButton();
-    } else if (!isHoveringBtn) {
-      if (btn.classList.contains('visible')) {
-        hideButton();
+    });
+    btn.addEventListener('pointerleave', () => {
+      isHoveringBtn = false;
+      btn.style.setProperty('background', 'rgba(18, 18, 22, 0.94)', 'important');
+      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.4)', 'important');
+      btn.style.setProperty('box-shadow', '0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2)', 'important');
+      btn.style.setProperty('transform', 'translateX(-50%) translateY(0px) scale(1)', 'important');
+      hideButton();
+    });
+
+    function handlePointerMove(e) {
+      const fsNow = checkIsFullScreen();
+      if (!fsNow) {
+        if (isBtnVisible) hideButton(true);
+        return;
+      }
+      isFullScreen = true;
+
+      const clientY = e.clientY;
+      const clientX = e.clientX;
+      const centerX = window.innerWidth / 2;
+      const distFromCenter = Math.abs(clientX - centerX);
+
+      // Hit Zone matching Chrome behavior:
+      // 1. Within top 75px across entire screen width, OR
+      // 2. Within top 140px within 380px of horizontal center
+      const isNearTopCenter = (clientY <= 75) || (clientY <= 140 && distFromCenter <= 380);
+
+      if (isNearTopCenter) {
+        showButton();
+      } else if (!isHoveringBtn) {
+        if (isBtnVisible && (clientY > 160 || distFromCenter > 420)) {
+          hideButton();
+        }
       }
     }
-  }
 
-  window.addEventListener('mousemove', handlePointerMove, { capture: true, passive: true });
-  window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true });
+    window.addEventListener('mousemove', handlePointerMove, { capture: true, passive: true });
+    window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true });
+    document.addEventListener('mousemove', handlePointerMove, { capture: true, passive: true });
+    document.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true });
 
-  document.addEventListener('fullscreenchange', () => updateFullScreenState());
-  document.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
-  window.addEventListener('fullscreenchange', () => updateFullScreenState());
-  window.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
-
-  // Observe YouTube's movie_player class changes for instant fullscreen toggle detection
-  function observePlayer() {
-    const player = document.querySelector('#movie_player');
-    if (player && !player._fsObserverAttached) {
-      player._fsObserverAttached = true;
-      const observer = new MutationObserver(() => {
-        updateFullScreenState(player.classList.contains('ytp-fullscreen'));
-      });
-      observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    function attachPlayerListeners() {
+      const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+      if (player && !player._fsMoveAttached) {
+        player._fsMoveAttached = true;
+        player.addEventListener('mousemove', handlePointerMove, { capture: true, passive: true });
+        player.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true });
+      }
     }
-  }
 
-  observePlayer();
-  const playerPoller = setInterval(() => {
+    document.addEventListener('fullscreenchange', () => updateFullScreenState());
+    document.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
+    window.addEventListener('fullscreenchange', () => updateFullScreenState());
+    window.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
+
+    // Observe YouTube's movie_player class changes for instant fullscreen toggle detection
+    function observePlayer() {
+      const player = document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
+      if (player) {
+        attachPlayerListeners();
+        if (!player._fsObserverAttached) {
+          player._fsObserverAttached = true;
+          const observer = new MutationObserver(() => {
+            updateFullScreenState(player.classList.contains('ytp-fullscreen'));
+          });
+          observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+        }
+      }
+    }
+
     observePlayer();
-    if (document.querySelector('#movie_player')?._fsObserverAttached) {
-      clearInterval(playerPoller);
+    const playerPoller = setInterval(() => {
+      observePlayer();
+      if (document.querySelector('#movie_player')?._fsObserverAttached) {
+        clearInterval(playerPoller);
+      }
+    }, 1000);
+
+    ipcRenderer.on('fullscreen-state-change', (event, fs) => {
+      updateFullScreenState(fs);
+    });
+
+    // Initial attachment to document.body
+    if (document.body) {
+      document.body.appendChild(btn);
+    } else {
+      window.addEventListener('DOMContentLoaded', () => {
+        if (document.body && !btn.parentElement) document.body.appendChild(btn);
+      });
     }
-  }, 1000);
 
-  ipcRenderer.on('fullscreen-state-change', (event, fs) => {
-    updateFullScreenState(fs);
-  });
-
-  updateFullScreenState();
+    try { ipcRenderer.send('log-debug', 'setupFullScreenExitButton initialized successfully'); } catch (e) {}
+    updateFullScreenState();
+  } catch (err) {
+    try { ipcRenderer.send('log-debug', 'setupFullScreenExitButton error: ' + err.stack); } catch (e) {}
+  }
 }
 
 // Run as soon as DOM is interactive or on load
