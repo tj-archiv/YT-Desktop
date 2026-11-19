@@ -1224,11 +1224,11 @@ function setupFullScreenExitButton() {
         max-width: 44px !important;
         max-height: 44px !important;
         border-radius: 50% !important;
-        background: rgba(18, 18, 22, 0.94) !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
-        border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2) !important;
+        background: rgba(28, 28, 28, 0.88) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -1255,14 +1255,15 @@ function setupFullScreenExitButton() {
         visibility: visible !important;
       }
       #yt-fs-exit-btn:hover {
-        background: rgba(45, 45, 55, 0.98) !important;
-        border-color: rgba(255, 255, 255, 0.65) !important;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.9), 0 0 16px rgba(255, 255, 255, 0.35) !important;
-        transform: translateX(-50%) translateY(0px) scale(1.08) !important;
+        background: rgba(48, 48, 48, 0.95) !important;
+        border-color: rgba(255, 255, 255, 0.28) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45) !important;
+        transform: translateX(-50%) translateY(0px) scale(1.05) !important;
       }
       #yt-fs-exit-btn:active {
-        transform: translateX(-50%) translateY(0px) scale(0.95) !important;
-        background: rgba(65, 65, 78, 1) !important;
+        transform: translateX(-50%) translateY(0px) scale(0.96) !important;
+        background: rgba(65, 65, 65, 0.95) !important;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
       }
       #yt-fs-exit-btn svg {
         width: 20px !important;
@@ -1321,11 +1322,11 @@ function setupFullScreenExitButton() {
       max-width: 44px !important;
       max-height: 44px !important;
       border-radius: 50% !important;
-      background: rgba(18, 18, 22, 0.94) !important;
-      backdrop-filter: blur(16px) !important;
-      -webkit-backdrop-filter: blur(16px) !important;
-      border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2) !important;
+      background: rgba(28, 28, 28, 0.88) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1478,17 +1479,17 @@ function setupFullScreenExitButton() {
     btn.addEventListener('click', doExitFullScreen);
     btn.addEventListener('pointerenter', () => {
       isHoveringBtn = true;
-      btn.style.setProperty('background', 'rgba(45, 45, 55, 0.98)', 'important');
-      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.65)', 'important');
-      btn.style.setProperty('box-shadow', '0 6px 24px rgba(0, 0, 0, 0.9), 0 0 16px rgba(255, 255, 255, 0.35)', 'important');
-      btn.style.setProperty('transform', 'translateX(-50%) translateY(0px) scale(1.08)', 'important');
+      btn.style.setProperty('background', 'rgba(48, 48, 48, 0.95)', 'important');
+      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.28)', 'important');
+      btn.style.setProperty('box-shadow', '0 4px 12px rgba(0, 0, 0, 0.45)', 'important');
+      btn.style.setProperty('transform', 'translateX(-50%) translateY(0px) scale(1.05)', 'important');
       showButton();
     });
     btn.addEventListener('pointerleave', () => {
       isHoveringBtn = false;
-      btn.style.setProperty('background', 'rgba(18, 18, 22, 0.94)', 'important');
-      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.4)', 'important');
-      btn.style.setProperty('box-shadow', '0 4px 20px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.2)', 'important');
+      btn.style.setProperty('background', 'rgba(28, 28, 28, 0.88)', 'important');
+      btn.style.setProperty('border-color', 'rgba(255, 255, 255, 0.15)', 'important');
+      btn.style.setProperty('box-shadow', '0 2px 8px rgba(0, 0, 0, 0.35)', 'important');
       btn.style.setProperty('transform', 'translateX(-50%) translateY(0px) scale(1)', 'important');
       hideButton();
     });
