@@ -876,6 +876,96 @@ function setupChannelPreviewHovercard() {
     return false;
   }
 
+  function extractPathFromEndpoint(ep) {
+    if (!ep) return null;
+    // 1. browseEndpoint canonicalBaseUrl (e.g. "/@RudanBrothers")
+    if (ep.browseEndpoint?.canonicalBaseUrl) {
+      const cp = extractChannelPath(ep.browseEndpoint.canonicalBaseUrl);
+      if (cp) return cp;
+    }
+    // 2. browseEndpoint browseId (e.g. "UCX6OQ3DkcsbYNE6H8uQQuVA")
+    if (ep.browseEndpoint?.browseId && typeof ep.browseEndpoint.browseId === 'string' && ep.browseEndpoint.browseId.startsWith('UC')) {
+      return '/channel/' + ep.browseEndpoint.browseId;
+    }
+    // 3. commandMetadata webCommandMetadata url
+    const webUrl = ep.commandMetadata?.webCommandMetadata?.url || ep.webCommandMetadata?.url;
+    if (webUrl) {
+      const cp = extractChannelPath(webUrl);
+      if (cp) return cp;
+    }
+    // 4. direct url
+    if (ep.url && typeof ep.url === 'string') {
+      const cp = extractChannelPath(ep.url);
+      if (cp) return cp;
+    }
+    return null;
+  }
+
+  function extractChannelFromDataObject(obj, depth = 0) {
+    if (!obj || typeof obj !== 'object' || depth > 5) return null;
+
+    // Direct endpoint check
+    if (obj.navigationEndpoint) {
+      const cp = extractPathFromEndpoint(obj.navigationEndpoint);
+      if (cp) return cp;
+    }
+    if (obj.browseEndpoint) {
+      const cp = extractPathFromEndpoint(obj);
+      if (cp) return cp;
+    }
+    if (obj.innertubeCommand) {
+      const cp = extractPathFromEndpoint(obj.innertubeCommand);
+      if (cp) return cp;
+    }
+
+    // Check byline fields: shortBylineText, longBylineText, bylineText, ownerText, channelTitleText
+    for (const field of ['shortBylineText', 'longBylineText', 'bylineText', 'ownerText', 'channelTitleText']) {
+      const textObj = obj[field];
+      if (textObj) {
+        if (textObj.navigationEndpoint) {
+          const cp = extractPathFromEndpoint(textObj.navigationEndpoint);
+          if (cp) return cp;
+        }
+        if (Array.isArray(textObj.runs)) {
+          for (const run of textObj.runs) {
+            const cp = extractPathFromEndpoint(run.navigationEndpoint);
+            if (cp) return cp;
+          }
+        }
+      }
+    }
+
+    // Check View Model metadata (contentMetadataViewModel, metadataRows, metadataParts)
+    const metadata = obj.metadata || obj.lockupViewModel?.metadata || obj;
+    const contentMeta = metadata?.contentMetadataViewModel || obj.contentMetadataViewModel;
+    if (contentMeta?.metadataRows) {
+      for (const row of contentMeta.metadataRows) {
+        for (const part of (row.metadataParts || [])) {
+          for (const cmd of (part.text?.commandRuns || [])) {
+            const cp = extractPathFromEndpoint(cmd.onTap?.innertubeCommand || cmd.onTap?.navigationEndpoint || cmd.onTap);
+            if (cp) return cp;
+          }
+        }
+      }
+    }
+
+    // Check nested data / videoData / compactVideoRenderer / lockupViewModel
+    if (obj.data && obj.data !== obj) {
+      const cp = extractChannelFromDataObject(obj.data, depth + 1);
+      if (cp) return cp;
+    }
+    if (obj.compactVideoRenderer) {
+      const cp = extractChannelFromDataObject(obj.compactVideoRenderer, depth + 1);
+      if (cp) return cp;
+    }
+    if (obj.lockupViewModel) {
+      const cp = extractChannelFromDataObject(obj.lockupViewModel, depth + 1);
+      if (cp) return cp;
+    }
+
+    return null;
+  }
+
   function findChannelTarget(e) {
     const path = e.composedPath ? e.composedPath() : [];
     const target = e.target;
@@ -885,10 +975,10 @@ function setupChannelPreviewHovercard() {
       return null;
     }
 
+    // 1. Direct Anchor tag check in path (Channel title or avatar link)
     for (const el of path) {
       if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
 
-      // 1. Direct Anchor tag check (Channel title or avatar link)
       if (el.tagName === 'A') {
         const href = el.href || el.getAttribute('href');
         const cp = extractChannelPath(href);
@@ -896,39 +986,80 @@ function setupChannelPreviewHovercard() {
           return { anchor: el, channelPath: cp };
         }
       }
+    }
 
-      // 2. Channel name wrapper check (ytd-channel-name, #channel-name, #upload-info, #owner, #byline-container, #byline)
-      if (
+    // 2. Channel name / Byline container check across all YouTube layouts
+    // (watch page suggested videos, search, subscriptions, home page, watch description)
+    for (const el of path) {
+      if (!el || el.nodeType !== Node.ELEMENT_NODE) continue;
+
+      const isBylineOrChannel =
         el.tagName === 'YTD-CHANNEL-NAME' ||
         el.id === 'channel-name' ||
         el.id === 'upload-info' ||
         el.id === 'owner' ||
         el.id === 'byline-container' ||
         el.id === 'byline' ||
-        (el.classList && (el.classList.contains('ytd-channel-name') || el.classList.contains('ytd-video-meta-block')))
-      ) {
-        const a = el.querySelector('a[href*="/@"], a[href*="/channel/"], a[href*="/c/"], a[href]');
+        el.tagName === 'YT-CONTENT-METADATA-VIEW-MODEL' ||
+        el.tagName === 'YT-LOCKUP-METADATA-VIEW-MODEL' ||
+        (el.classList && (
+          el.classList.contains('ytd-channel-name') ||
+          el.classList.contains('ytd-video-meta-block') ||
+          el.classList.contains('yt-content-metadata-view-model') ||
+          el.classList.contains('yt-content-metadata-view-model__metadata-row') ||
+          el.classList.contains('yt-lockup-metadata-view-model') ||
+          el.classList.contains('badge-and-byline-renderer')
+        ));
+
+      if (isBylineOrChannel) {
+        // A. Direct anchor inside this byline element
+        const a = el.querySelector ? el.querySelector('a[href*="/@"], a[href*="/channel/"], a[href*="/c/"], a[href*="/user/"], a.yt-core-attributed-string__link') : null;
         if (a) {
           const cp = extractChannelPath(a.href || a.getAttribute('href'));
           if (cp) return { anchor: a || el, channelPath: cp };
         }
-        // Support recommended videos / compact renderers with Polymer navigation endpoints
-        const renderer = el.closest ? el.closest('ytd-compact-video-renderer, ytd-video-meta-block, ytd-rich-grid-media, ytd-video-renderer, ytd-channel-name') : null;
-        const endpointUrl = renderer?.data?.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
-                            renderer?.data?.shortBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
-                            renderer?.data?.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
-                            renderer?.data?.longBylineText?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url ||
-                            el.data?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
-                            el.data?.runs?.[0]?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
-        if (endpointUrl) {
-          const cp = extractChannelPath(endpointUrl);
-          if (cp) return { anchor: el, channelPath: cp };
+
+        // B. Card container enclosing this byline (compact video renderer, lockup view model, etc.)
+        // NOTE: We omit 'ytd-channel-name' so closest() ascends to the enclosing video card!
+        const cardContainer = el.closest ? el.closest('ytd-compact-video-renderer, yt-lockup-view-model, ytd-rich-grid-media, ytd-rich-item-renderer, ytd-video-renderer, ytd-playlist-video-renderer, ytd-grid-video-renderer, ytd-watch-metadata, ytd-video-owner-renderer') : null;
+
+        // B1. Check if card container has any channel anchor
+        if (cardContainer) {
+          const cardAnchors = cardContainer.querySelectorAll('a[href*="/@"], a[href*="/channel/"], a[href*="/c/"], a[href*="/user/"], a.yt-core-attributed-string__link');
+          for (const ca of cardAnchors) {
+            const cp = extractChannelPath(ca.href || ca.getAttribute('href'));
+            if (cp) return { anchor: el, channelPath: cp };
+          }
+        }
+
+        // B2. Check data sources on el and cardContainer
+        const dataSources = [
+          el.data,
+          el.__data?.data,
+          el.__data,
+          el.viewModel,
+          el.__model,
+          cardContainer?.data,
+          cardContainer?.__data?.data,
+          cardContainer?.__data,
+          cardContainer?.lockupViewModel,
+          cardContainer?.viewModel,
+          cardContainer?.__model,
+          cardContainer?.__dataHost?.data,
+          cardContainer?.__dataHost?.__data?.data
+        ];
+
+        for (const src of dataSources) {
+          if (src) {
+            const cp = extractChannelFromDataObject(src);
+            if (cp) return { anchor: el, channelPath: cp };
+          }
         }
       }
 
       // 3. Avatar containers (channel thumbnail, avatar-link, etc. outside of comments)
       if (el.id === 'avatar' || el.id === 'avatar-link' || el.id === 'channel-thumbnail') {
-        const a = (el.tagName === 'A' ? el : null) || (el.closest ? el.closest('a') : null) || el.querySelector('a');
+        const a = (el.tagName === 'A' ? el : null) || (el.closest ? el.closest('a') : null) || (el.querySelector ? el.querySelector('a') : null);
         if (a) {
           const cp = extractChannelPath(a.href || a.getAttribute('href'));
           if (cp) return { anchor: el, channelPath: cp };
