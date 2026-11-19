@@ -1207,6 +1207,219 @@ function setupTabTitleTooltip() {
   });
 }
 
+// Fullscreen Top-Center Chrome-Style "✕" Exit Button
+function setupFullScreenExitButton() {
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    #yt-fs-exit-btn {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translate(-50%, -60px) scale(0.9);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(24, 24, 28, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 1px 4px rgba(0, 0, 0, 0.4);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2147483647 !important;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.22s cubic-bezier(0.1, 0.9, 0.2, 1),
+                  opacity 0.2s ease,
+                  background 0.15s ease,
+                  border-color 0.15s ease,
+                  box-shadow 0.15s ease;
+      user-select: none;
+      outline: none;
+      box-sizing: border-box;
+      padding: 0;
+      margin: 0;
+    }
+    #yt-fs-exit-btn.visible {
+      transform: translate(-50%, 0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #yt-fs-exit-btn:hover {
+      background: rgba(45, 45, 54, 0.96);
+      border-color: rgba(255, 255, 255, 0.4);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.85), 0 0 10px rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, 0) scale(1.08);
+    }
+    #yt-fs-exit-btn:active {
+      transform: translate(-50%, 0) scale(0.95);
+      background: rgba(60, 60, 72, 1);
+    }
+    #yt-fs-exit-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: #ffffff;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: block;
+      pointer-events: none;
+    }
+  `;
+  (document.head || document.documentElement).appendChild(styleEl);
+
+  const btn = document.createElement('button');
+  btn.id = 'yt-fs-exit-btn';
+  btn.title = 'Exit full screen (Esc)';
+  btn.setAttribute('aria-label', 'Exit full screen');
+  btn.innerHTML = `
+    <svg viewBox="0 0 14 14" fill="none">
+      <line x1="2.5" y1="2.5" x2="11.5" y2="11.5"/>
+      <line x1="11.5" y1="2.5" x2="2.5" y2="11.5"/>
+    </svg>
+  `;
+
+  let isFullScreen = false;
+  let hideTimer = null;
+  let isHoveringBtn = false;
+
+  function checkIsFullScreen() {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement ||
+      (window.innerHeight === screen.height && window.innerWidth === screen.width)
+    );
+  }
+
+  function getTargetContainer() {
+    return document.fullscreenElement ||
+           document.webkitFullscreenElement ||
+           document.querySelector('#movie_player') ||
+           document.body ||
+           document.documentElement;
+  }
+
+  function ensureAttached() {
+    const container = getTargetContainer();
+    if (container && !container.contains(btn)) {
+      container.appendChild(btn);
+    }
+  }
+
+  function showButton() {
+    clearTimeout(hideTimer);
+    hideTimer = null;
+    ensureAttached();
+    btn.classList.add('visible');
+  }
+
+  function hideButton(immediate = false) {
+    if (immediate) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+      btn.classList.remove('visible');
+      return;
+    }
+    if (isHoveringBtn) return;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      if (!isHoveringBtn) {
+        btn.classList.remove('visible');
+      }
+    }, 700);
+  }
+
+  function updateFullScreenState(fs) {
+    isFullScreen = (typeof fs === 'boolean') ? fs : checkIsFullScreen();
+    if (!isFullScreen) {
+      hideButton(true);
+      if (btn.parentElement && btn.parentElement !== document.body) {
+        (document.body || document.documentElement).appendChild(btn);
+      }
+    } else {
+      ensureAttached();
+    }
+  }
+
+  function doExitFullScreen(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    hideButton(true);
+
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+
+    const player = document.querySelector('#movie_player');
+    if (player && typeof player.cancelFullScreen === 'function') {
+      try { player.cancelFullScreen(); } catch (err) {}
+    }
+
+    try {
+      ipcRenderer.send('exit-fullscreen');
+    } catch (err) {}
+  }
+
+  btn.addEventListener('click', doExitFullScreen);
+  btn.addEventListener('pointerenter', () => {
+    isHoveringBtn = true;
+    showButton();
+  });
+  btn.addEventListener('pointerleave', () => {
+    isHoveringBtn = false;
+    hideButton();
+  });
+
+  function handlePointerMove(e) {
+    if (!isFullScreen) {
+      if (checkIsFullScreen()) {
+        isFullScreen = true;
+      } else {
+        return;
+      }
+    }
+
+    const clientY = e.clientY;
+    const clientX = e.clientX;
+    const centerX = window.innerWidth / 2;
+    const distFromCenter = Math.abs(clientX - centerX);
+
+    // Hit Zone: Cursor within top 65px and within 180px horizontally of center
+    const isNearTopCenter = (clientY <= 65 && distFromCenter <= 180);
+
+    if (isNearTopCenter) {
+      showButton();
+    } else if (!isHoveringBtn) {
+      if (btn.classList.contains('visible')) {
+        hideButton();
+      }
+    }
+  }
+
+  window.addEventListener('mousemove', handlePointerMove, { capture: true, passive: true });
+  window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: true });
+
+  document.addEventListener('fullscreenchange', () => updateFullScreenState());
+  document.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
+  window.addEventListener('fullscreenchange', () => updateFullScreenState());
+  window.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
+
+  ipcRenderer.on('fullscreen-state-change', (event, fs) => {
+    updateFullScreenState(fs);
+  });
+
+  updateFullScreenState();
+}
+
 // Run as soon as DOM is interactive or on load
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', () => {
@@ -1214,12 +1427,14 @@ if (document.readyState === 'loading') {
     setupChannelPreviewHovercard();
     setupGalleryPreviewVolume();
     setupTabTitleTooltip();
+    setupFullScreenExitButton();
   });
 } else {
   setupAdSkipper();
   setupChannelPreviewHovercard();
   setupGalleryPreviewVolume();
   setupTabTitleTooltip();
+  setupFullScreenExitButton();
 }
 
 // Seamless Drag & Drop: notify main window when user begins dragging text or links

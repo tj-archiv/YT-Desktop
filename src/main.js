@@ -429,6 +429,17 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
       return;
     }
 
+    // F11: Toggle Fullscreen
+    if (input.key === 'F11' && !input.control && !input.alt && !input.shift) {
+      event.preventDefault();
+      const nextFs = !mainWindow.isFullScreen();
+      mainWindow.setFullScreen(nextFs);
+      isHtmlFullScreen = nextFs;
+      updateActiveViewBounds();
+      try { view.webContents.send('fullscreen-state-change', nextFs); } catch (e) {}
+      return;
+    }
+
     // Alt+Left Arrow: Back
     if (input.alt && !input.control && !input.shift && input.key === 'ArrowLeft') {
       event.preventDefault();
@@ -481,12 +492,14 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     mainWindow.setFullScreen(true);
     const [w, h] = mainWindow.getSize();
     view.setBounds({ x: 0, y: 0, width: w, height: h });
+    try { view.webContents.send('fullscreen-state-change', true); } catch (e) {}
   });
 
   view.webContents.on('leave-html-full-screen', () => {
     isHtmlFullScreen = false;
     mainWindow.setFullScreen(false);
     updateActiveViewBounds();
+    try { view.webContents.send('fullscreen-state-change', false); } catch (e) {}
   });
 
   view.webContents.on('will-navigate', (event, navUrl) => {
@@ -788,9 +801,17 @@ function createWindow() {
 
   mainWindow.on('enter-full-screen', () => {
     updateActiveViewBounds();
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab?.view?.webContents && !activeTab.view.webContents.isDestroyed()) {
+      try { activeTab.view.webContents.send('fullscreen-state-change', true); } catch (e) {}
+    }
   });
   mainWindow.on('leave-full-screen', () => {
     updateActiveViewBounds();
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab?.view?.webContents && !activeTab.view.webContents.isDestroyed()) {
+      try { activeTab.view.webContents.send('fullscreen-state-change', false); } catch (e) {}
+    }
   });
 
   // CLOSE WINDOW: Saves tabs, terminates all video/audio, and quits app like Chrome
@@ -1303,6 +1324,17 @@ ipcMain.on('window-maximize', () => {
 ipcMain.on('window-close', () => mainWindow?.close());
 ipcMain.on('toggle-mini-player', () => toggleMiniPlayer());
 ipcMain.on('toggle-always-on-top', () => toggleAlwaysOnTop());
+ipcMain.on('exit-fullscreen', () => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()) {
+    mainWindow.setFullScreen(false);
+  }
+  isHtmlFullScreen = false;
+  updateActiveViewBounds();
+  const activeTab = tabs.find(t => t.id === activeTabId);
+  if (activeTab?.view?.webContents && !activeTab.view.webContents.isDestroyed()) {
+    try { activeTab.view.webContents.send('fullscreen-state-change', false); } catch (e) {}
+  }
+});
 
 app.on('second-instance', () => {
   log('Second instance attempted, restoring mainWindow');
