@@ -1212,61 +1212,75 @@ function setupFullScreenExitButton() {
   const styleEl = document.createElement('style');
   styleEl.textContent = `
     #yt-fs-exit-btn {
-      position: fixed;
-      top: 14px;
-      left: 50%;
-      transform: translate(-50%, -60px) scale(0.9);
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: rgba(24, 24, 28, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 1px 4px rgba(0, 0, 0, 0.4);
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      all: initial !important;
+      position: fixed !important;
+      top: 14px !important;
+      left: 50% !important;
+      transform: translate(-50%, -60px) scale(0.9) !important;
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+      max-width: 40px !important;
+      max-height: 40px !important;
+      border-radius: 50% !important;
+      background: rgba(24, 24, 28, 0.92) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.25) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75), 0 1px 4px rgba(0, 0, 0, 0.5) !important;
+      color: #ffffff !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
       z-index: 2147483647 !important;
-      opacity: 0;
-      pointer-events: none;
+      opacity: 0 !important;
+      pointer-events: none !important;
       transition: transform 0.22s cubic-bezier(0.1, 0.9, 0.2, 1),
                   opacity 0.2s ease,
                   background 0.15s ease,
                   border-color 0.15s ease,
-                  box-shadow 0.15s ease;
-      user-select: none;
-      outline: none;
-      box-sizing: border-box;
-      padding: 0;
-      margin: 0;
+                  box-shadow 0.15s ease !important;
+      user-select: none !important;
+      outline: none !important;
+      box-sizing: border-box !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      line-height: 1 !important;
     }
     #yt-fs-exit-btn.visible {
-      transform: translate(-50%, 0) scale(1);
-      opacity: 1;
-      pointer-events: auto;
+      transform: translate(-50%, 0) scale(1) !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+      cursor: pointer !important;
     }
     #yt-fs-exit-btn:hover {
-      background: rgba(45, 45, 54, 0.96);
-      border-color: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.85), 0 0 10px rgba(255, 255, 255, 0.2);
-      transform: translate(-50%, 0) scale(1.08);
+      background: rgba(48, 48, 58, 0.98) !important;
+      border-color: rgba(255, 255, 255, 0.45) !important;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.85), 0 0 12px rgba(255, 255, 255, 0.25) !important;
+      transform: translate(-50%, 0) scale(1.08) !important;
     }
     #yt-fs-exit-btn:active {
-      transform: translate(-50%, 0) scale(0.95);
-      background: rgba(60, 60, 72, 1);
+      transform: translate(-50%, 0) scale(0.95) !important;
+      background: rgba(65, 65, 78, 1) !important;
     }
     #yt-fs-exit-btn svg {
-      width: 14px;
-      height: 14px;
-      stroke: #ffffff;
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      display: block;
-      pointer-events: none;
+      width: 14px !important;
+      height: 14px !important;
+      min-width: 14px !important;
+      min-height: 14px !important;
+      max-width: 14px !important;
+      max-height: 14px !important;
+      stroke: #ffffff !important;
+      stroke-width: 2.2 !important;
+      stroke-linecap: round !important;
+      stroke-linejoin: round !important;
+      display: block !important;
+      pointer-events: none !important;
+      fill: none !important;
+      box-sizing: content-box !important;
     }
   `;
   (document.head || document.documentElement).appendChild(styleEl);
@@ -1287,26 +1301,37 @@ function setupFullScreenExitButton() {
   let isHoveringBtn = false;
 
   function checkIsFullScreen() {
-    return !!(
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement ||
-      (window.innerHeight === screen.height && window.innerWidth === screen.width)
-    );
+    if (isFullScreen) return true;
+    if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+      return true;
+    }
+    const player = document.querySelector('#movie_player');
+    if (player) {
+      if (player.classList.contains('ytp-fullscreen')) return true;
+      if (typeof player.isFullScreen === 'function') {
+        try { if (player.isFullScreen()) return true; } catch (e) {}
+      }
+    }
+    const watchFlexy = document.querySelector('ytd-watch-flexy');
+    if (watchFlexy && watchFlexy.hasAttribute('fullscreen')) return true;
+    if (document.documentElement.classList.contains('ytp-fullscreen')) return true;
+    if (document.body.classList.contains('ytp-fullscreen')) return true;
+    return false;
   }
 
   function getTargetContainer() {
-    return document.fullscreenElement ||
-           document.webkitFullscreenElement ||
-           document.querySelector('#movie_player') ||
-           document.body ||
-           document.documentElement;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) return fsEl;
+    const player = document.querySelector('#movie_player');
+    if (player && (player.classList.contains('ytp-fullscreen') || isFullScreen)) {
+      return player;
+    }
+    return document.body || document.documentElement;
   }
 
   function ensureAttached() {
     const container = getTargetContainer();
-    if (container && !container.contains(btn)) {
+    if (container && btn.parentElement !== container) {
       container.appendChild(btn);
     }
   }
@@ -1331,10 +1356,11 @@ function setupFullScreenExitButton() {
       if (!isHoveringBtn) {
         btn.classList.remove('visible');
       }
-    }, 700);
+    }, 750);
   }
 
   function updateFullScreenState(fs) {
+    const previous = isFullScreen;
     isFullScreen = (typeof fs === 'boolean') ? fs : checkIsFullScreen();
     if (!isFullScreen) {
       hideButton(true);
@@ -1353,17 +1379,27 @@ function setupFullScreenExitButton() {
     }
     hideButton(true);
 
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    }
-
+    // 1. YouTube native player exit
     const player = document.querySelector('#movie_player');
-    if (player && typeof player.cancelFullScreen === 'function') {
-      try { player.cancelFullScreen(); } catch (err) {}
+    if (player) {
+      if (typeof player.cancelFullScreen === 'function') {
+        try { player.cancelFullScreen(); } catch (err) {}
+      }
+      if (typeof player.toggleFullscreen === 'function' && player.classList.contains('ytp-fullscreen')) {
+        try { player.toggleFullscreen(); } catch (err) {}
+      }
     }
 
+    // 2. DOM Fullscreen API
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+
+    // 3. Electron IPC to restore window bounds
     try {
       ipcRenderer.send('exit-fullscreen');
     } catch (err) {}
@@ -1380,21 +1416,22 @@ function setupFullScreenExitButton() {
   });
 
   function handlePointerMove(e) {
-    if (!isFullScreen) {
-      if (checkIsFullScreen()) {
-        isFullScreen = true;
-      } else {
-        return;
-      }
+    const fsNow = checkIsFullScreen();
+    if (!fsNow) {
+      if (btn.classList.contains('visible')) hideButton(true);
+      return;
     }
+    isFullScreen = true;
 
     const clientY = e.clientY;
     const clientX = e.clientX;
     const centerX = window.innerWidth / 2;
     const distFromCenter = Math.abs(clientX - centerX);
 
-    // Hit Zone: Cursor within top 65px and within 180px horizontally of center
-    const isNearTopCenter = (clientY <= 65 && distFromCenter <= 180);
+    // Natural Chrome-parity Hit Zone:
+    // 1. Within top 45px across entire screen, OR
+    // 2. Within top 85px within 350px of horizontal center
+    const isNearTopCenter = (clientY <= 45) || (clientY <= 85 && distFromCenter <= 350);
 
     if (isNearTopCenter) {
       showButton();
@@ -1412,6 +1449,26 @@ function setupFullScreenExitButton() {
   document.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
   window.addEventListener('fullscreenchange', () => updateFullScreenState());
   window.addEventListener('webkitfullscreenchange', () => updateFullScreenState());
+
+  // Observe YouTube's movie_player class changes for instant fullscreen toggle detection
+  function observePlayer() {
+    const player = document.querySelector('#movie_player');
+    if (player && !player._fsObserverAttached) {
+      player._fsObserverAttached = true;
+      const observer = new MutationObserver(() => {
+        updateFullScreenState(player.classList.contains('ytp-fullscreen'));
+      });
+      observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+
+  observePlayer();
+  const playerPoller = setInterval(() => {
+    observePlayer();
+    if (document.querySelector('#movie_player')?._fsObserverAttached) {
+      clearInterval(playerPoller);
+    }
+  }, 1000);
 
   ipcRenderer.on('fullscreen-state-change', (event, fs) => {
     updateFullScreenState(fs);

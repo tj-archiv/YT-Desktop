@@ -433,10 +433,18 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     if (input.key === 'F11' && !input.control && !input.alt && !input.shift) {
       event.preventDefault();
       const nextFs = !mainWindow.isFullScreen();
+      log(`F11 pressed, nextFs=${nextFs}`);
       mainWindow.setFullScreen(nextFs);
       isHtmlFullScreen = nextFs;
       updateActiveViewBounds();
       try { view.webContents.send('fullscreen-state-change', nextFs); } catch (e) {}
+      return;
+    }
+
+    // Ctrl+Shift+I or F12: Toggle DevTools
+    if ((isCtrl && input.shift && key === 'i') || input.key === 'F12') {
+      event.preventDefault();
+      view.webContents.toggleDevTools();
       return;
     }
 
@@ -488,6 +496,7 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
 
   // HTML5 Fullscreen for video
   view.webContents.on('enter-html-full-screen', () => {
+    log('view.webContents enter-html-full-screen triggered');
     isHtmlFullScreen = true;
     mainWindow.setFullScreen(true);
     const [w, h] = mainWindow.getSize();
@@ -496,6 +505,7 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
   });
 
   view.webContents.on('leave-html-full-screen', () => {
+    log('view.webContents leave-html-full-screen triggered');
     isHtmlFullScreen = false;
     mainWindow.setFullScreen(false);
     updateActiveViewBounds();
