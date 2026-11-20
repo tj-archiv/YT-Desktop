@@ -43,6 +43,40 @@ const mainWorldScript = `
     } catch (e) {}
   }
 
+  function isPreviewTarget(el) {
+    if (!el) return false;
+    if (el.closest && el.closest('#movie_player:not(#inline-preview-player)')) {
+      return false;
+    }
+    if (el.closest && el.closest('ytd-shorts, ytd-reel-video-renderer')) {
+      return false;
+    }
+    return !!(el.closest && el.closest([
+      '#inline-preview-player',
+      'ytd-video-preview',
+      'ytd-inline-preview-renderer',
+      '#preview',
+      '#video-preview',
+      'ytd-thumbnail-overlay-inline-playback-renderer',
+      'ytd-rich-item-renderer',
+      'ytd-compact-video-renderer',
+      'ytd-video-renderer',
+      'ytd-grid-video-renderer',
+      'ytd-playlist-video-renderer'
+    ].join(',')));
+  }
+
+  function isVideoMuted(video) {
+    if (!video) return true;
+    if (video.muted || video.volume === 0) return true;
+    const inlineP = video.closest ? video.closest('#inline-preview-player') : null;
+    if (inlineP) {
+      if (typeof inlineP.isMuted === 'function' && inlineP.isMuted()) return true;
+      if (typeof inlineP.getVolume === 'function' && inlineP.getVolume() === 0) return true;
+    }
+    return false;
+  }
+
   // 1. Intercept HTMLMediaElement.prototype.play:
   // Strictly prevent unopened background tabs from playing video or advancing time before user switches to them
   const origPlay = HTMLMediaElement.prototype.play;
@@ -199,6 +233,10 @@ const mainWorldScript = `
           }
 
           if (state === 1) { // 1 = playing
+            if (player.id === 'inline-preview-player' || isPreviewTarget(player)) {
+              if (typeof player.isMuted === 'function' && player.isMuted()) return;
+              if (typeof player.getVolume === 'function' && player.getVolume() === 0) return;
+            }
             notifyVideoStartedPlaying();
           }
         });
@@ -206,45 +244,82 @@ const mainWorldScript = `
     }
   }
 
-  // 4. Safety net on <video> element
-  function hookVideo() {
-    const video = document.querySelector('video');
-    if (!video || video.__bgHooked) return;
-    video.__bgHooked = true;
+  function handleVideoPlayback(video) {
+    if (!video) return;
 
-    if (isForeground && !hasEverBeenForeground) {
-      hasEverBeenForeground = true;
+    if (!isForeground && !hasEverBeenForeground) {
+      pendingAutoplayOnFirstSwitch = true;
+      try {
+        video.currentTime = 0;
+        video.pause();
+        const p = getPlayer();
+        if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
+      } catch (e) {}
+      return;
     }
 
-    video.addEventListener('playing', () => {
-      if (!isForeground && !hasEverBeenForeground) {
-        pendingAutoplayOnFirstSwitch = true;
-        try {
-          video.currentTime = 0;
-          video.pause();
-          const p = getPlayer();
-          if (p && typeof p.pauseVideo === 'function') p.pauseVideo();
-        } catch (e) {}
+    if (isPreviewTarget(video)) {
+      if (isVideoMuted(video)) {
         return;
       }
+    }
 
-      notifyVideoStartedPlaying();
-    });
+    notifyVideoStartedPlaying();
+  }
 
-    video.addEventListener('timeupdate', () => {
-      if (!isForeground && !hasEverBeenForeground && video.currentTime > 0.5) {
-        pendingAutoplayOnFirstSwitch = true;
-        try {
-          video.currentTime = 0;
-          video.pause();
-          const p = getPlayer();
-          if (p && typeof p.pauseVideo === 'function') {
-            p.pauseVideo();
-          }
-        } catch (e) {}
+  // 4. Safety net on <video> elements
+  function hookVideo() {
+    const videos = document.querySelectorAll('video');
+    videos.forEach(video => {
+      if (video.__bgHooked) return;
+      video.__bgHooked = true;
+
+      if (isForeground && !hasEverBeenForeground) {
+        hasEverBeenForeground = true;
       }
+
+      video.addEventListener('playing', () => {
+        handleVideoPlayback(video);
+      });
+
+      video.addEventListener('volumechange', () => {
+        if (isPreviewTarget(video)) {
+          if (!isVideoMuted(video) && !video.paused) {
+            notifyVideoStartedPlaying();
+          }
+        }
+      });
+
+      video.addEventListener('timeupdate', () => {
+        if (!isForeground && !hasEverBeenForeground && video.currentTime > 0.5) {
+          pendingAutoplayOnFirstSwitch = true;
+          try {
+            video.currentTime = 0;
+            video.pause();
+            const p = getPlayer();
+            if (p && typeof p.pauseVideo === 'function') {
+              p.pauseVideo();
+            }
+          } catch (e) {}
+        }
+      });
     });
   }
+
+  // Document capture listeners as global safety nets
+  document.addEventListener('playing', (e) => {
+    if (e.target && e.target.tagName === 'VIDEO') {
+      handleVideoPlayback(e.target);
+    }
+  }, true);
+
+  document.addEventListener('volumechange', (e) => {
+    if (e.target && e.target.tagName === 'VIDEO' && isPreviewTarget(e.target)) {
+      if (!isVideoMuted(e.target) && !e.target.paused) {
+        notifyVideoStartedPlaying();
+      }
+    }
+  }, true);
 
   const pollInterval = setInterval(() => {
     hookPlayer();
@@ -1238,15 +1313,41 @@ function setupChannelPreviewHovercard() {
   }, true);
 }
 
-// 7. Gallery / Feed Hover Video Preview Volume Cap (25%)
+// 7. Gallery / Feed Hover Video Preview Volume Cap (25%) & Unmute Detection
 function setupGalleryPreviewVolume() {
   function isPreviewTarget(el) {
     if (!el) return false;
-    // Don't modify the main watch page video player!
+    // Don't modify the main watch page video player or shorts!
     if (el.closest && el.closest('#movie_player:not(#inline-preview-player)')) {
       return false;
     }
-    return !!(el.closest && el.closest('#inline-preview-player, ytd-video-preview, ytd-inline-preview-renderer, #preview, ytd-rich-item-renderer #video-preview'));
+    if (el.closest && el.closest('ytd-shorts, ytd-reel-video-renderer')) {
+      return false;
+    }
+    return !!(el.closest && el.closest([
+      '#inline-preview-player',
+      'ytd-video-preview',
+      'ytd-inline-preview-renderer',
+      '#preview',
+      '#video-preview',
+      'ytd-thumbnail-overlay-inline-playback-renderer',
+      'ytd-rich-item-renderer',
+      'ytd-compact-video-renderer',
+      'ytd-video-renderer',
+      'ytd-grid-video-renderer',
+      'ytd-playlist-video-renderer'
+    ].join(',')));
+  }
+
+  function isVideoMuted(video) {
+    if (!video) return true;
+    if (video.muted || video.volume === 0) return true;
+    const inlineP = video.closest ? video.closest('#inline-preview-player') : null;
+    if (inlineP) {
+      if (typeof inlineP.isMuted === 'function' && inlineP.isMuted()) return true;
+      if (typeof inlineP.getVolume === 'function' && inlineP.getVolume() === 0) return true;
+    }
+    return false;
   }
 
   function enforcePreviewVolume(video) {
@@ -1270,6 +1371,11 @@ function setupGalleryPreviewVolume() {
   document.addEventListener('volumechange', (e) => {
     if (e.target && e.target.tagName === 'VIDEO') {
       enforcePreviewVolume(e.target);
+      if (isPreviewTarget(e.target)) {
+        if (!isVideoMuted(e.target) && !e.target.paused) {
+          ipcRenderer.send('video-started-playing');
+        }
+      }
     }
   }, true);
 
@@ -1282,6 +1388,11 @@ function setupGalleryPreviewVolume() {
   document.addEventListener('playing', (e) => {
     if (e.target && e.target.tagName === 'VIDEO') {
       enforcePreviewVolume(e.target);
+      if (isPreviewTarget(e.target)) {
+        if (!isVideoMuted(e.target) && !e.target.paused) {
+          ipcRenderer.send('video-started-playing');
+        }
+      }
     }
   }, true);
 

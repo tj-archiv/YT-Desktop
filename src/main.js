@@ -233,7 +233,17 @@ function broadcastState() {
   });
 }
 
+let lastPauseOtherTabsTime = 0;
+let lastPauseOtherTabsTabId = null;
+
 function pauseOtherTabs(playingTabId) {
+  const now = Date.now();
+  if (lastPauseOtherTabsTabId === playingTabId && (now - lastPauseOtherTabsTime) < 300) {
+    return;
+  }
+  lastPauseOtherTabsTime = now;
+  lastPauseOtherTabsTabId = playingTabId;
+
   log('pauseOtherTabs called for playingTab: ' + playingTabId);
   tabs.forEach(t => {
     if (t.id !== playingTabId && t.view && !t.view.webContents.isDestroyed()) {
@@ -363,10 +373,6 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     canGoForward: false,
     hasEverBeenForeground: !isBackground
   };
-
-  view.webContents.on('media-started-playing', () => {
-    pauseOtherTabs(tab.id);
-  });
 
   // Chrome Keyboard Shortcuts inside tab view (Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+1..9)
   view.webContents.on('before-input-event', (event, input) => {
@@ -593,13 +599,24 @@ function createTab(url = DEFAULT_HOME_URL, isBackground = false, insertIndex = -
     saveWindowState();
   });
 
+  view.webContents.on('audio-state-changed', (event, audible) => {
+    tab.isAudible = audible;
+    broadcastState();
+  });
+
   view.webContents.on('media-started-playing', () => {
-    tab.isAudible = true;
+    if (typeof view.webContents.isCurrentlyAudible === 'function') {
+      tab.isAudible = view.webContents.isCurrentlyAudible();
+    }
     broadcastState();
   });
 
   view.webContents.on('media-paused', () => {
-    tab.isAudible = false;
+    if (typeof view.webContents.isCurrentlyAudible === 'function') {
+      tab.isAudible = view.webContents.isCurrentlyAudible();
+    } else {
+      tab.isAudible = false;
+    }
     broadcastState();
   });
 
