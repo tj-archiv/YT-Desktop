@@ -66,6 +66,9 @@ const mainWorldScript = `
     ].join(',')));
   }
 
+  let tabMuted = false;
+  let isNavigating = false;
+
   function isVideoMuted(video) {
     if (!video) return true;
     if (video.muted || video.volume === 0) return true;
@@ -74,7 +77,31 @@ const mainWorldScript = `
       if (typeof inlineP.isMuted === 'function' && inlineP.isMuted()) return true;
       if (typeof inlineP.getVolume === 'function' && inlineP.getVolume() === 0) return true;
     }
+    const mainP = document.querySelector('#movie_player');
+    if (mainP && !inlineP) {
+      if (typeof mainP.isMuted === 'function' && mainP.isMuted()) return true;
+      if (typeof mainP.getVolume === 'function' && mainP.getVolume() === 0) return true;
+    }
     return false;
+  }
+
+  function applyTabMutedState(target) {
+    if (!tabMuted) return;
+    try {
+      const p = document.querySelector('#movie_player, #shorts-player');
+      if (p && typeof p.mute === 'function') {
+        p.mute();
+      }
+    } catch (e) {}
+
+    try {
+      const videos = target ? [target] : document.querySelectorAll('video');
+      videos.forEach(v => {
+        if (!isPreviewTarget(v)) {
+          v.muted = true;
+        }
+      });
+    } catch (e) {}
   }
 
   // 1. Intercept HTMLMediaElement.prototype.play:
@@ -189,10 +216,28 @@ const mainWorldScript = `
     }
   });
 
+  window.addEventListener('yt-navigate-start', () => {
+    isNavigating = true;
+    if (tabMuted) {
+      applyTabMutedState();
+    }
+  });
+
   window.addEventListener('yt-navigate-finish', () => {
     if (isForeground) {
       hasEverBeenForeground = true;
       pendingAutoplayOnFirstSwitch = false;
+    }
+    if (tabMuted) {
+      applyTabMutedState();
+      setTimeout(applyTabMutedState, 100);
+      setTimeout(applyTabMutedState, 300);
+      setTimeout(applyTabMutedState, 600);
+      setTimeout(() => {
+        isNavigating = false;
+      }, 1000);
+    } else {
+      isNavigating = false;
     }
   });
 
@@ -233,9 +278,17 @@ const mainWorldScript = `
           }
 
           if (state === 1) { // 1 = playing
-            if (player.id === 'inline-preview-player' || isPreviewTarget(player)) {
-              if (typeof player.isMuted === 'function' && player.isMuted()) return;
-              if (typeof player.getVolume === 'function' && player.getVolume() === 0) return;
+            const playerMuted = (typeof player.isMuted === 'function' && player.isMuted()) ||
+                                (typeof player.getVolume === 'function' && player.getVolume() === 0);
+            if (playerMuted || tabMuted) {
+              if (tabMuted) {
+                applyTabMutedState();
+              }
+              return;
+            }
+            const v = document.querySelector('video');
+            if (v && isVideoMuted(v)) {
+              return;
             }
             notifyVideoStartedPlaying();
           }
@@ -258,10 +311,13 @@ const mainWorldScript = `
       return;
     }
 
-    if (isPreviewTarget(video)) {
-      if (isVideoMuted(video)) {
-        return;
-      }
+    if (tabMuted) {
+      applyTabMutedState(video);
+      return;
+    }
+
+    if (isVideoMuted(video)) {
+      return;
     }
 
     notifyVideoStartedPlaying();
@@ -271,22 +327,39 @@ const mainWorldScript = `
   function hookVideo() {
     const videos = document.querySelectorAll('video');
     videos.forEach(video => {
-      if (video.__bgHooked) return;
+      if (video.__bgHooked) {
+        if (tabMuted && !isPreviewTarget(video) && !video.muted) {
+          applyTabMutedState(video);
+        }
+        return;
+      }
       video.__bgHooked = true;
+
+      if (tabMuted && !isPreviewTarget(video)) {
+        applyTabMutedState(video);
+      }
 
       if (isForeground && !hasEverBeenForeground) {
         hasEverBeenForeground = true;
       }
 
       video.addEventListener('playing', () => {
-        handleVideoPlayback(video);
+        handleMediaPlayback(video);
       });
 
       video.addEventListener('volumechange', () => {
-        if (isPreviewTarget(video)) {
-          if (!isVideoMuted(video) && !video.paused) {
-            notifyVideoStartedPlaying();
-          }
+        if (isNavigating && tabMuted) {
+          applyTabMutedState(video);
+          return;
+        }
+
+        const muted = isVideoMuted(video);
+        if (!isPreviewTarget(video)) {
+          tabMuted = muted;
+        }
+
+        if (!muted && !video.paused) {
+          notifyVideoStartedPlaying();
         }
       });
 
@@ -309,15 +382,73 @@ const mainWorldScript = `
   // Document capture listeners as global safety nets
   document.addEventListener('playing', (e) => {
     if (e.target && e.target.tagName === 'VIDEO') {
-      handleVideoPlayback(e.target);
+      handleMediaPlayback(e.target);
     }
   }, true);
 
   document.addEventListener('volumechange', (e) => {
-    if (e.target && e.target.tagName === 'VIDEO' && isPreviewTarget(e.target)) {
-      if (!isVideoMuted(e.target) && !e.target.paused) {
-        notifyVideoStartedPlaying();
-      }
+    const video = e.target;
+    if (!video || video.tagName !== 'VIDEO') return;
+
+    if (isNavigating && tabMuted) {
+      applyTabMutedState(video);
+      return;
+    }
+
+    const muted = isVideoMuted(video);
+    if (!isPreviewTarget(video)) {
+      tabMuted = muted;
+    }
+
+    if (!muted && !video.paused) {
+      notifyVideoStartedPlaying();
+    }
+  }, true);
+
+  // User explicit click on mute button or volume slider
+  document.addEventListener('click', (e) => {
+    const muteBtn = e.target.closest && e.target.closest('.ytp-mute-button, [aria-label="Mute"], [aria-label="Unmute"], [data-title-no-tooltip="Mute"], [data-title-no-tooltip="Unmute"]');
+    if (muteBtn) {
+      setTimeout(() => {
+        const v = document.querySelector('video');
+        const p = getPlayer();
+        const muted = isVideoMuted(v) || (p && typeof p.isMuted === 'function' && p.isMuted());
+        tabMuted = muted;
+        if (!muted && v && !v.paused) {
+          notifyVideoStartedPlaying();
+        }
+      }, 50);
+      return;
+    }
+
+    const volSlider = e.target.closest && e.target.closest('.ytp-volume-slider, .ytp-volume-panel, .ytp-volume-slider-handle');
+    if (volSlider) {
+      setTimeout(() => {
+        const v = document.querySelector('video');
+        const muted = isVideoMuted(v);
+        tabMuted = muted;
+        if (!muted && v && !v.paused) {
+          notifyVideoStartedPlaying();
+        }
+      }, 50);
+    }
+  }, true);
+
+  // User keyboard shortcut 'm'
+  document.addEventListener('keydown', (e) => {
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+
+    if (e.key === 'm' || e.key === 'M') {
+      setTimeout(() => {
+        const v = document.querySelector('video');
+        const p = getPlayer();
+        const muted = isVideoMuted(v) || (p && typeof p.isMuted === 'function' && p.isMuted());
+        tabMuted = muted;
+        if (!muted && v && !v.paused) {
+          notifyVideoStartedPlaying();
+        }
+      }, 50);
     }
   }, true);
 
@@ -1339,6 +1470,9 @@ function setupGalleryPreviewVolume() {
     ].join(',')));
   }
 
+  let tabMuted = false;
+  let isNavigating = false;
+
   function isVideoMuted(video) {
     if (!video) return true;
     if (video.muted || video.volume === 0) return true;
@@ -1347,7 +1481,31 @@ function setupGalleryPreviewVolume() {
       if (typeof inlineP.isMuted === 'function' && inlineP.isMuted()) return true;
       if (typeof inlineP.getVolume === 'function' && inlineP.getVolume() === 0) return true;
     }
+    const mainP = document.querySelector('#movie_player');
+    if (mainP && !inlineP) {
+      if (typeof mainP.isMuted === 'function' && mainP.isMuted()) return true;
+      if (typeof mainP.getVolume === 'function' && mainP.getVolume() === 0) return true;
+    }
     return false;
+  }
+
+  function applyTabMutedState(target) {
+    if (!tabMuted) return;
+    try {
+      const p = document.querySelector('#movie_player, #shorts-player');
+      if (p && typeof p.mute === 'function') {
+        p.mute();
+      }
+    } catch (e) {}
+
+    try {
+      const videos = target ? [target] : document.querySelectorAll('video');
+      videos.forEach(v => {
+        if (!isPreviewTarget(v)) {
+          v.muted = true;
+        }
+      });
+    } catch (e) {}
   }
 
   function enforcePreviewVolume(video) {
